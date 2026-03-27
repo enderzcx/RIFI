@@ -1,0 +1,75 @@
+@import "tailwindcss";
+
+:root {
+  --bg-primary: #0B0E11;
+  --bg-card: rgba(22, 27, 34, 0.6);
+  --bg-glass: rgba(22, 27, 34, 0.4);
+  --border: rgba(255, 255, 255, 0.06);
+  --accent-blue: #3B82F6;
+  --accent-violet: #8B5CF6;
+  --glow-blue: rgba(59, 130, 246, 0.15);
+  --glow-violet: rgba(139, 92, 246, 0.15);
+}
+
+body {
+  background: var(--bg-primary);
+  color: #e4e4e7;
+  font-family: var(--font-inter), system-ui, -apple-system, sans-serif;
+}
+
+/* Glassmorphism */
+.glass {
+  background: var(--bg-glass);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid var(--border);
+}
+
+.glass-card {
+  background: var(--bg-card);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+}
+
+/* Glow effects */
+.glow-blue { box-shadow: 0 0 20px var(--glow-blue), inset 0 0 20px var(--glow-blue); }
+.glow-violet { box-shadow: 0 0 20px var(--glow-violet), inset 0 0 20px var(--glow-violet); }
+.glow-border { border-color: rgba(59, 130, 246, 0.3); }
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.2); }
+
+/* Pulse dot */
+@keyframes pulse-glow {
+  0%, 100% { opacity: 1; box-shadow: 0 0 4px rgba(74, 222, 128, 0.6); }
+  50% { opacity: 0.5; box-shadow: 0 0 8px rgba(74, 222, 128, 0.8); }
+}
+.pulse-dot { animation: pulse-glow 2s ease-in-out infinite; }
+
+/* Gradient text */
+.gradient-text {
+  background: linear-gradient(135deg, #3B82F6, #8B5CF6, #3B82F6);
+  background-size: 200% 200%;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* Chat bubble animations */
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.animate-fade-in-up { animation: fadeInUp 0.3s ease-out; }
+
+/* Neon input focus */
+input:focus, textarea:focus {
+  outline: none;
+  border-color: rgba(59, 130, 246, 0.5);
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
+}
