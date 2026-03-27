@@ -5,10 +5,10 @@ node_modules/
 !.env.example
 *.pem
 data/memory/
-web/node_modules/
-web/.next/
-web/.env.local
 out/
 dist/
 .DS_Store
 *.log
+__pycache__/
+*.pyc
+cache/
