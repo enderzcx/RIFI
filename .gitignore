@@ -20,3 +20,5 @@ ARCHITECTURE.md
 arb-stop-order-test/
 sepolia-stop-order-test/
 base-stop-order-test/
+mockup-*.html
+mockups.html
