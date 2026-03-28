@@ -25,11 +25,11 @@ Traditional DEX stop-loss requires a centralized backend to monitor prices. If t
 Every 15 min — VPS Intelligence Pipeline
          │
          ├── 27+ sources (FRED/VIX, GDELT, news, Twitter, on-chain)
-         ├── Qwen 0.8b: filter + compress → structured signal JSON
-         └── GPT-5.4: analyze → { action, confidence, reason }
+         └── LLM: analyze → { action, confidence, reason, push_worthy }
                     │
                     │ push_worthy = true?
                     ▼
+         POST /api/auto-trade  (Bearer token auth)
          SessionVault.spendFromSession()   ← enforces budget on-chain
          Uniswap V2 swap / set_stop_loss()
                     │
@@ -147,9 +147,8 @@ cd web && cp .env.example .env.local && npm install && npm run dev
 
 Every 15 minutes, the Sentinel agent:
 1. Aggregates 27+ data sources (FRED/VIX, GDELT, crypto news, Twitter sentiment)
-2. Small model (Qwen 0.8b) filters and compresses to structured signals
-3. GPT-5.4 analyzes and decides — confidence score, action, reason
-4. If `push_worthy`: executes autonomously via SessionVault on-chain
+2. LLM analyzes and decides — confidence score, action, reason
+3. If `push_worthy`: executes autonomously via SessionVault on-chain
 
 User controls: `maxPerTrade`, `totalBudget`, `expiry` — enforced by SessionVault contract.
 
@@ -161,7 +160,7 @@ User controls: `maxPerTrade`, `totalBudget`, `expiry` — enforced by SessionVau
 |-------|-----------|
 | Frontend | Next.js, React 19, TypeScript, Tailwind CSS |
 | Web3 | Wagmi, Viem, ConnectKit |
-| AI | GPT-5.4 + Qwen 0.8b (edge filtering) |
+| AI | OpenAI-compatible LLM (GPT-5.4) |
 | Blockchain | Base (8453) + Reactive Network (1597) |
 | Contracts | Solidity 0.8+, Foundry, OpenZeppelin |
 | Real-time | Server-Sent Events (SSE) |
