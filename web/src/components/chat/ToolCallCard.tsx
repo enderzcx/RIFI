@@ -1,6 +1,11 @@
 'use client'
 
 import { ToolResult } from '@/lib/types'
+import {
+  DollarSign, Briefcase, Radio, ClipboardList,
+  ArrowLeftRight, ShieldAlert, Target, KeyRound,
+  Bot, Brain, Wrench, ExternalLink, Check
+} from 'lucide-react'
 
 export function ToolCallCard({ tool, result }: ToolResult) {
   const r = result as Record<string, unknown> | null
@@ -9,94 +14,129 @@ export function ToolCallCard({ tool, result }: ToolResult) {
   switch (tool) {
     case 'get_price':
       return (
-        <Chip icon="💲" label={`ETH ${r.price_formatted}`} sub={`Pool: ${r.reserve_weth} WETH / ${r.reserve_usdc} USDC`} />
+        <Card icon={<DollarSign />} color="blue"
+          label={`ETH ${r.price_formatted}`}
+          sub={`Pool: ${r.reserve_weth} WETH / ${r.reserve_usdc} USDC`} />
       )
 
     case 'get_portfolio':
       return (
-        <Chip icon="💼" label="Portfolio loaded" sub={`${r.weth} | ${r.usdc} | ${r.eth_gas} gas`} />
+        <Card icon={<Briefcase />} color="emerald"
+          label="Portfolio loaded"
+          sub={`${r.weth} | ${r.usdc} | ${r.eth_gas} gas`} />
       )
 
     case 'get_market_signals': {
-      const signals = r as Record<string, unknown>
-      const bias = String(signals.technical_bias || 'neutral')
-      const action = String(signals.recommended_action || 'hold')
+      const s = r as Record<string, unknown>
       return (
-        <Chip
-          icon="📡"
-          label={`Risk ${signals.macro_risk_score}/100 | Sentiment ${signals.crypto_sentiment}/100`}
-          sub={`Bias: ${bias} | Action: ${action}`}
-        />
+        <Card icon={<Radio />} color="violet"
+          label={`Risk ${s.macro_risk_score}/100 | Sentiment ${s.crypto_sentiment}/100`}
+          sub={`Bias: ${s.technical_bias} | Action: ${s.recommended_action}`} />
       )
     }
 
     case 'get_active_orders':
       return (
-        <Chip icon="📋" label={`${r.active_count} active orders`} sub={`${r.total_count} total`} />
+        <Card icon={<ClipboardList />} color="zinc"
+          label={`${r.active_count} active orders`}
+          sub={`${r.total_count} total`} />
       )
 
     case 'market_swap':
       return (
-        <ChipTx icon="🔄" label={`Swapped ${r.amountIn} → ${r.amountOut}`} txHash={r.txHash as string} />
+        <CardTx icon={<ArrowLeftRight />} color="cyan"
+          label={`Swapped ${r.amountIn} → ${r.amountOut}`}
+          txHash={r.txHash as string} />
       )
 
     case 'set_stop_loss':
       return (
-        <ChipTx icon="🛑" label={`Stop Loss: ${r.amount} @ $${r.threshold}`} txHash={r.txHash as string} />
+        <CardTx icon={<ShieldAlert />} color="red"
+          label={`Stop Loss: ${r.amount} @ $${r.threshold}`}
+          txHash={r.reactiveTxHash as string || r.txHash as string} />
       )
 
     case 'set_take_profit':
       return (
-        <ChipTx icon="🎯" label={`Take Profit: ${r.amount} @ $${r.threshold}`} txHash={r.txHash as string} />
+        <CardTx icon={<Target />} color="green"
+          label={`Take Profit: ${r.amount} @ $${r.threshold}`}
+          txHash={r.reactiveTxHash as string || r.txHash as string} />
       )
 
     case 'get_session': {
       const s = r as Record<string, unknown>
       return s.active ? (
-        <Chip icon="🔑" label={`Session active | ${s.remaining} remaining`} sub={`Expires: ${s.expiry_formatted}`} />
+        <Card icon={<KeyRound />} color="amber"
+          label={`Session active | ${s.remaining} remaining`}
+          sub={`Expires: ${s.expiry_formatted}`} />
       ) : (
-        <Chip icon="🔑" label="No active session" sub="Enable auto trading to start" />
+        <Card icon={<KeyRound />} color="zinc"
+          label="No active session"
+          sub="Enable auto trading to start" />
       )
     }
 
     case 'session_swap':
       return (
-        <ChipTx icon="🤖" label={`Auto swap: ${r.amountIn} → ${r.amountOut}`} txHash={r.txHash as string} />
+        <CardTx icon={<Bot />} color="violet"
+          label={`Auto swap: ${r.amountIn} → ${r.amountOut}`}
+          txHash={r.txHash as string} />
       )
 
     case 'update_memory':
-      return <Chip icon="🧠" label="Memory updated" sub={String(r.section)} />
+      return <Card icon={<Brain />} color="pink" label="Memory updated" sub={String(r.section)} />
 
     default:
-      return <Chip icon="🔧" label={tool} sub="completed" />
+      return <Card icon={<Wrench />} color="zinc" label={tool} sub="completed" />
   }
 }
 
-function Chip({ icon, label, sub }: { icon: string; label: string; sub?: string }) {
+const COLORS: Record<string, { bg: string; border: string; icon: string }> = {
+  blue:    { bg: 'bg-blue-500/8',    border: 'border-blue-500/20',    icon: 'text-blue-400'    },
+  emerald: { bg: 'bg-emerald-500/8', border: 'border-emerald-500/20', icon: 'text-emerald-400' },
+  violet:  { bg: 'bg-violet-500/8',  border: 'border-violet-500/20',  icon: 'text-violet-400'  },
+  cyan:    { bg: 'bg-cyan-500/8',    border: 'border-cyan-500/20',    icon: 'text-cyan-400'    },
+  red:     { bg: 'bg-red-500/8',     border: 'border-red-500/20',     icon: 'text-red-400'     },
+  green:   { bg: 'bg-green-500/8',   border: 'border-green-500/20',   icon: 'text-green-400'   },
+  amber:   { bg: 'bg-amber-500/8',   border: 'border-amber-500/20',   icon: 'text-amber-400'   },
+  pink:    { bg: 'bg-pink-500/8',    border: 'border-pink-500/20',    icon: 'text-pink-400'    },
+  zinc:    { bg: 'bg-zinc-500/8',    border: 'border-zinc-500/20',    icon: 'text-zinc-400'    },
+}
+
+function Card({ icon, color, label, sub }: { icon: React.ReactNode; color: string; label: string; sub?: string }) {
+  const c = COLORS[color] || COLORS.zinc
   return (
-    <div className="inline-flex items-center gap-2 bg-zinc-800/60 border border-white/[0.06] rounded-lg px-3 py-1.5 my-0.5">
-      <span className="text-sm">{icon}</span>
-      <div>
-        <span className="text-xs text-zinc-300">{label}</span>
-        {sub && <span className="text-[10px] text-zinc-500 ml-2">{sub}</span>}
+    <div className={`flex items-center gap-3 ${c.bg} border ${c.border} rounded-xl px-3.5 py-2.5 my-1 transition-colors`}>
+      <div className={`${c.icon} shrink-0`}>
+        {icon}
       </div>
+      <div className="min-w-0 flex-1">
+        <p className="text-[13px] text-zinc-200 font-medium leading-snug">{label}</p>
+        {sub && <p className="text-[11px] text-zinc-500 leading-snug mt-0.5 truncate">{sub}</p>}
+      </div>
+      <Check className="w-3.5 h-3.5 text-zinc-600 shrink-0" />
     </div>
   )
 }
 
-function ChipTx({ icon, label, txHash }: { icon: string; label: string; txHash?: string }) {
+function CardTx({ icon, color, label, txHash }: { icon: React.ReactNode; color: string; label: string; txHash?: string }) {
+  const c = COLORS[color] || COLORS.zinc
   return (
-    <div className="inline-flex items-center gap-2 bg-zinc-800/60 border border-white/[0.06] rounded-lg px-3 py-1.5 my-0.5">
-      <span className="text-sm">{icon}</span>
-      <span className="text-xs text-zinc-300">{label}</span>
+    <div className={`flex items-center gap-3 ${c.bg} border ${c.border} rounded-xl px-3.5 py-2.5 my-1 transition-colors`}>
+      <div className={`${c.icon} shrink-0`}>
+        {icon}
+      </div>
+      <div className="min-w-0 flex-1">
+        <p className="text-[13px] text-zinc-200 font-medium leading-snug">{label}</p>
+      </div>
       {txHash && txHash !== '0x0000000000000000000000000000000000000000000000000000000000000000' && (
         <a
           href={`https://basescan.org/tx/${txHash}`}
           target="_blank"
           rel="noopener noreferrer"
-          className="text-[10px] text-blue-400 hover:underline ml-1"
+          className="flex items-center gap-1 text-[11px] text-blue-400 hover:text-blue-300 transition-colors shrink-0"
         >
-          View TX
+          TX <ExternalLink className="w-3 h-3" />
         </a>
       )}
     </div>

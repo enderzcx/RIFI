@@ -7,11 +7,14 @@ import { getAllMemory } from '@/lib/memory'
 import { getAccount } from '@/lib/chain/config'
 import type { ChatCompletionMessageParam } from 'openai/resources/chat/completions'
 
-export async function POST(req: NextRequest) {
-  const { messages } = await req.json() as { messages: ChatCompletionMessageParam[] }
+function sse(data: Record<string, unknown>): string {
+  return `data: ${JSON.stringify(data)}\n\n`
+}
 
-  // Inject AI memory into system prompt
-  const wallet = getAccount().address
+export async function POST(req: NextRequest) {
+  const { messages, userAddress } = await req.json() as { messages: ChatCompletionMessageParam[]; userAddress?: string }
+
+  const wallet = userAddress || getAccount().address
   const memory = getAllMemory(wallet)
   const systemContent = memory
     ? `${SYSTEM_PROMPT}\n\n## Your Memory About This User\n${memory}`
@@ -22,77 +25,107 @@ export async function POST(req: NextRequest) {
     ...messages,
   ]
 
-  // Function calling loop: max 5 rounds
-  for (let round = 0; round < 5; round++) {
-    const response = await llm.chat.completions.create({
-      model: MODEL,
-      messages: fullMessages,
-      tools,
-      tool_choice: 'auto',
-    })
+  const encoder = new TextEncoder()
 
-    const choice = response.choices[0]
-    const message = choice.message
-
-    fullMessages.push(message)
-
-    // If no tool calls, we're done
-    if (!message.tool_calls || message.tool_calls.length === 0) {
-      return Response.json({
-        role: 'assistant',
-        content: message.content || '',
-        tool_results: extractToolResults(fullMessages),
-      })
-    }
-
-    // Execute each tool call
-    for (const toolCall of message.tool_calls) {
-      const tc = toolCall as { id: string; type: string; function: { name: string; arguments: string } }
-      const args = JSON.parse(tc.function.arguments || '{}')
-      const result = await executeTool(tc.function.name, args)
-
-      fullMessages.push({
-        role: 'tool',
-        tool_call_id: tc.id,
-        content: result,
-      })
-    }
-  }
-
-  // If we hit max rounds, return last message
-  const lastAssistant = fullMessages.filter(m => m.role === 'assistant').pop()
-  return Response.json({
-    role: 'assistant',
-    content: (lastAssistant as { content?: string })?.content || 'Analysis complete.',
-    tool_results: extractToolResults(fullMessages),
-  })
-}
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function extractToolResults(messages: any[]): Array<{
-  tool: string
-  args: Record<string, unknown>
-  result: unknown
-}> {
-  const results: Array<{ tool: string; args: Record<string, unknown>; result: unknown }> = []
-
-  for (const msg of messages) {
-    if (msg.role === 'assistant' && msg.tool_calls) {
-      for (const tc of msg.tool_calls) {
-        const fn = tc.function || tc
-        const toolResult = messages.find(
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          (m: any) => m.role === 'tool' && m.tool_call_id === tc.id
-        )
-        results.push({
-          tool: fn.name,
-          args: JSON.parse(fn.arguments || '{}'),
-          result: toolResult ? safeJsonParse(toolResult.content) : null,
-        })
+  const stream = new ReadableStream({
+    async start(controller) {
+      const push = (data: Record<string, unknown>) => {
+        try { controller.enqueue(encoder.encode(sse(data))) } catch {}
       }
-    }
-  }
-  return results
+
+      try {
+        const allToolResults: Array<{ tool: string; args: Record<string, unknown>; result: unknown }> = []
+
+        for (let round = 0; round < 5; round++) {
+          // Use streaming for content, but we need to collect tool_calls too
+          const stream = await llm.chat.completions.create({
+            model: MODEL,
+            messages: fullMessages,
+            tools,
+            tool_choice: 'auto',
+            stream: true,
+          })
+
+          let contentBuffer = ''
+          let toolCalls: Array<{ id: string; function: { name: string; arguments: string } }> = []
+
+          for await (const chunk of stream) {
+            const delta = chunk.choices?.[0]?.delta
+            if (!delta) continue
+
+            // Stream content tokens
+            if (delta.content) {
+              contentBuffer += delta.content
+              push({ type: 'content_delta', text: delta.content })
+            }
+
+            // Accumulate tool calls from deltas
+            if (delta.tool_calls) {
+              for (const tc of delta.tool_calls) {
+                const idx = tc.index
+                if (!toolCalls[idx]) {
+                  toolCalls[idx] = { id: '', function: { name: '', arguments: '' } }
+                }
+                if (tc.id) toolCalls[idx].id = tc.id
+                if (tc.function?.name) toolCalls[idx].function.name += tc.function.name
+                if (tc.function?.arguments) toolCalls[idx].function.arguments += tc.function.arguments
+              }
+            }
+          }
+
+          // Add assistant message to context
+          const assistantMsg: ChatCompletionMessageParam = {
+            role: 'assistant' as const,
+            content: contentBuffer || null,
+            ...(toolCalls.length > 0 ? {
+              tool_calls: toolCalls.map(tc => ({
+                id: tc.id,
+                type: 'function' as const,
+                function: tc.function,
+              }))
+            } : {}),
+          }
+          fullMessages.push(assistantMsg)
+
+          // No tool calls = done
+          if (toolCalls.length === 0) break
+
+          // Execute tools with streaming feedback
+          for (const tc of toolCalls) {
+            const args = safeJsonParse(tc.function.arguments) as Record<string, unknown>
+            push({ type: 'tool_start', tool: tc.function.name, args })
+
+            const result = await executeTool(tc.function.name, args, wallet)
+            const parsed = safeJsonParse(result)
+
+            push({ type: 'tool_end', tool: tc.function.name, args, result: parsed })
+
+            allToolResults.push({ tool: tc.function.name, args, result: parsed })
+
+            fullMessages.push({
+              role: 'tool' as const,
+              tool_call_id: tc.id,
+              content: result,
+            })
+          }
+        }
+
+        push({ type: 'done', tool_results: allToolResults })
+      } catch (err) {
+        push({ type: 'error', message: String(err) })
+      }
+
+      controller.close()
+    },
+  })
+
+  return new Response(stream, {
+    headers: {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      Connection: 'keep-alive',
+    },
+  })
 }
 
 function safeJsonParse(s: string): unknown {

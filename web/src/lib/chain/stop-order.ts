@@ -1,5 +1,5 @@
 import { publicClient, ADDRESSES, ERC20_ABI, PRICE_COEFFICIENT, getWalletClient, getAccount } from './config'
-import { createWalletClient, http, parseEther, encodeDeployData } from 'viem'
+import { createWalletClient, http, parseEther, encodeDeployData, encodeFunctionData } from 'viem'
 import { privateKeyToAccount } from 'viem/accounts'
 import { readFileSync } from 'fs'
 import { join } from 'path'
@@ -176,5 +176,34 @@ export async function setTakeProfit(amount: string, threshold: number): Promise<
     amount: amount + ' WETH',
     threshold,
     type: 'take_profit',
+  }
+}
+
+// Build unsigned approve tx for user + deploy reactive from server
+export async function buildStopLossTxs(amount: string, threshold: number, userAddress: string, isStopLoss = true) {
+  const addr = userAddress as `0x${string}`
+  const amountWei = parseEther(amount)
+
+  const txs: Array<{ to: string; data: string; value: string; description: string }> = []
+
+  // Check user's allowance to callback
+  const allowance = await publicClient.readContract({
+    address: ADDRESSES.WETH, abi: ERC20_ABI, functionName: 'allowance',
+    args: [addr, ADDRESSES.CALLBACK],
+  }) as bigint
+
+  if (allowance < amountWei) {
+    txs.push({
+      to: ADDRESSES.WETH,
+      data: encodeFunctionData({ abi: ERC20_ABI, functionName: 'approve', args: [ADDRESSES.CALLBACK, amountWei] }),
+      value: '0',
+      description: `Approve ${amount} WETH to Stop-Loss Callback`,
+    })
+  }
+
+  return {
+    userTxs: txs,
+    // After user signs, server deploys reactive contract
+    serverAction: { type: isStopLoss ? 'deploy_stop_loss' : 'deploy_take_profit', threshold, amount },
   }
 }

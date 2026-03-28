@@ -1,27 +1,27 @@
 import { publicClient, ADDRESSES, ERC20_ABI, getAccount } from './config'
 import { formatUnits, formatEther } from 'viem'
 
-export async function getPortfolio() {
-  const account = getAccount()
+export async function getPortfolio(walletAddress?: string) {
+  const addr = (walletAddress || getAccount().address) as `0x${string}`
 
   const [wethBalance, usdcBalance, ethBalance] = await Promise.all([
     publicClient.readContract({
       address: ADDRESSES.WETH,
       abi: ERC20_ABI,
       functionName: 'balanceOf',
-      args: [account.address],
+      args: [addr],
     }),
     publicClient.readContract({
       address: ADDRESSES.USDC,
       abi: ERC20_ABI,
       functionName: 'balanceOf',
-      args: [account.address],
+      args: [addr],
     }),
-    publicClient.getBalance({ address: account.address }),
+    publicClient.getBalance({ address: addr }),
   ])
 
   return {
-    address: account.address,
+    address: addr,
     weth: {
       balance: (wethBalance as bigint).toString(),
       formatted: formatEther(wethBalance as bigint),

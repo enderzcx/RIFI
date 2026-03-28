@@ -1,10 +1,11 @@
 import { getPortfolio } from '@/lib/chain/portfolio'
 import { getPrice } from '@/lib/chain/price'
 
-export async function GET() {
+export async function GET(req: Request) {
   try {
+    const wallet = new URL(req.url).searchParams.get('wallet') || undefined
     const [portfolio, priceData] = await Promise.all([
-      getPortfolio(),
+      getPortfolio(wallet),
       getPrice(),
     ])
 
