@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import { Web3Provider } from "@/components/providers/Web3Provider";
+
 import "./globals.css";
 
 const inter = Inter({
@@ -21,7 +22,10 @@ export default function RootLayout({
   return (
     <html lang="en" className="dark">
       <body className={`${inter.variable} font-sans min-h-screen bg-[#0B0E11] text-zinc-100 antialiased`}>
-        <Web3Provider>{children}</Web3Provider>
+        <Web3Provider>
+          {children}
+
+        </Web3Provider>
       </body>
     </html>
   );

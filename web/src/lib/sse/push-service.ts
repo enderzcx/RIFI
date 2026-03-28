@@ -59,6 +59,7 @@ export type PushEventType =
   | 'ORDER_CREATED'     // 新订单创建
   | 'ORDER_CANCELLED'   // 订单取消
   | 'PORTFOLIO_UPDATE'  // 持仓变化
+  | 'PATROL_REPORT'     // AI巡逻报告（定期摘要）
 
 export type SignalLevel = 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW'
 

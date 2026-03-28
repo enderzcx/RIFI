@@ -15,10 +15,17 @@ const LLM_MODEL = process.env.LLM_MODEL || 'gpt-5.4-mini-low-fast';
 const LLM_KEY = process.env.LLM_API_KEY || 'pwd';
 const NEWS_TOKEN = process.env.OPENNEWS_TOKEN;
 const NEWS_API = 'https://ai.6551.io';
+const AUTO_TRADE_URL = process.env.AUTO_TRADE_URL || ''; // e.g. http://localhost:3000/api/auto-trade
+const AUTO_TRADE_SECRET = process.env.AUTO_TRADE_SECRET || 'rifi-auto-2026';
 
 let analysisCache = null;
 let lastUpdate = null;
 let analyzing = false;
+
+// Patrol report: accumulate analyses, push summary every 12 rounds (3h)
+const PATROL_INTERVAL = 12; // 12 * 15min = 3h
+let patrolHistory = [];
+let patrolCounter = 0;
 
 // --- Data Sources ---
 
@@ -165,10 +172,126 @@ Output ONLY the JSON, no other text.`;
     };
     lastUpdate = now;
     console.log(`[${now}] Analysis complete (${result.duration_s}s) | Risk:${parsed.macro_risk_score} Sentiment:${parsed.crypto_sentiment} Bias:${parsed.technical_bias} Action:${parsed.recommended_action} Push:${parsed.push_worthy}`);
+
+    // Event-driven auto-trade: notify frontend backend when push_worthy
+    if (parsed.push_worthy && AUTO_TRADE_URL) {
+      triggerAutoTrade(parsed).catch(err => console.error('[AutoTrade] Trigger failed:', err.message));
+    }
+
+    // Patrol report: accumulate and push every 3h
+    patrolHistory.push({ ...parsed, timestamp: now });
+    patrolCounter++;
+    if (patrolCounter >= PATROL_INTERVAL) {
+      pushPatrolReport(patrolHistory).catch(err => console.error('[Patrol] Error:', err.message));
+      patrolHistory = [];
+      patrolCounter = 0;
+    }
   } catch (err) {
     console.error('[Analysis] Error:', err.message);
   }
   analyzing = false;
+}
+
+// --- Patrol Report (3h summary) ---
+
+async function generatePatrolReport(history) {
+  if (!history.length) return null;
+  const summary = history.map((h, i) => {
+    const t = new Date(h.timestamp).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
+    return `${t} | Risk:${h.macro_risk_score} Sent:${h.crypto_sentiment} Bias:${h.technical_bias} Action:${h.recommended_action} Conf:${h.confidence}`;
+  }).join('\n');
+
+  const prompt = `你是加密交易AI的巡逻报告员。以下是过去3小时每15分钟一次的市场分析记录（共${history.length}次）：
+
+${summary}
+
+最新一次的完整 briefing：${history[history.length - 1]?.briefing || 'N/A'}
+
+请生成一份简洁的3小时巡逻报告（中文），包含：
+1. 这3小时内市场整体走势（risk/sentiment 变化趋势）
+2. 是否有值得注意的变化或异常
+3. AI 做了什么操作（如果全是hold就说"未执行任何交易"）
+4. 下一阶段关注点
+
+要求：4-6句话，简洁直接，像给老板的快报。不要用markdown格式符号。`;
+
+  try {
+    const result = await llm([{ role: 'user', content: prompt }], { max_tokens: 400, timeout: 20000 });
+    return result.content;
+  } catch (err) {
+    console.error('[Patrol] Report generation failed:', err.message);
+    // Fallback: raw summary
+    const latest = history[history.length - 1];
+    return `过去3小时完成${history.length}次市场扫描。最新状态：风险${latest.macro_risk_score}/100，情绪${latest.crypto_sentiment}/100，偏向${latest.technical_bias}，建议${latest.recommended_action}。未执行交易。`;
+  }
+}
+
+async function pushPatrolReport(history) {
+  if (!AUTO_TRADE_URL) return;
+  const report = await generatePatrolReport(history);
+  if (!report) return;
+
+  // Derive stats
+  const risks = history.map(h => h.macro_risk_score);
+  const sents = history.map(h => h.crypto_sentiment);
+  const actions = history.map(h => h.recommended_action);
+  const trades = actions.filter(a => a === 'strong_buy' || a === 'strong_sell' || a === 'increase_exposure');
+
+  const payload = {
+    type: 'PATROL_REPORT',
+    level: 'LOW',
+    data: {
+      report,
+      period: `${new Date(history[0].timestamp).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })} - ${new Date(history[history.length - 1].timestamp).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}`,
+      scans: history.length,
+      risk_range: `${Math.min(...risks)}-${Math.max(...risks)}`,
+      sentiment_range: `${Math.min(...sents)}-${Math.max(...sents)}`,
+      trades_executed: trades.length,
+      dominant_action: mostCommon(actions),
+    },
+    timestamp: new Date().toISOString(),
+  };
+
+  // Push via the frontend SSE endpoint
+  const baseUrl = AUTO_TRADE_URL.replace('/api/auto-trade', '');
+  try {
+    await fetch(`${baseUrl}/api/patrol-report`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${AUTO_TRADE_SECRET}` },
+      body: JSON.stringify(payload),
+      signal: AbortSignal.timeout(10000),
+    });
+    console.log(`[Patrol] 3h report pushed (${history.length} scans)`);
+  } catch (err) {
+    console.error(`[Patrol] Push failed: ${err.message}`);
+  }
+}
+
+function mostCommon(arr) {
+  const freq = {};
+  for (const v of arr) freq[v] = (freq[v] || 0) + 1;
+  return Object.entries(freq).sort((a, b) => b[1] - a[1])[0]?.[0] || 'hold';
+}
+
+// --- Auto-Trade Trigger ---
+
+async function triggerAutoTrade(signal) {
+  console.log(`[AutoTrade] Push-worthy signal detected: ${signal.push_reason || 'high-value'}`);
+  try {
+    const res = await fetch(AUTO_TRADE_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${AUTO_TRADE_SECRET}`,
+      },
+      body: JSON.stringify({ signal }),
+      signal: AbortSignal.timeout(60000),
+    });
+    const data = await res.json();
+    console.log(`[AutoTrade] Response: ${data.status} | Tools: ${data.tool_calls || 0}`);
+  } catch (err) {
+    console.error(`[AutoTrade] Failed: ${err.message}`);
+  }
 }
 
 // --- Collect & Analyze ---

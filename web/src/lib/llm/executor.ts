@@ -5,7 +5,7 @@ import { setStopLoss, setTakeProfit } from '@/lib/chain/stop-order'
 import { getActiveOrders, getAllOrders, getOrder, trackOrder, cancelOrder } from '@/lib/chain/event-indexer'
 import { writeMemory } from '@/lib/memory'
 import { getSession, sessionSwap } from '@/lib/chain/session'
-import { getAccount, getWalletClient, ADDRESSES, ERC20_ABI, publicClient } from '@/lib/chain/config'
+import { getAccount, getWalletClient, ADDRESSES, ERC20_ABI, ORDER_REGISTRY_ABI, publicClient } from '@/lib/chain/config'
 
 const VPS_API = process.env.VPS_API_URL || 'http://localhost:3200'
 
@@ -108,24 +108,52 @@ export async function executeTool(name: string, args: Record<string, unknown>): 
         if (!order) return JSON.stringify({ error: `Order ${orderId} not found` })
         if (order.status !== 'active') return JSON.stringify({ error: `Order ${orderId} is ${order.status}, not active` })
 
-        // Revoke allowance to callback contract (set to 0)
         const walletClient = getWalletClient()
-        const txHash = await walletClient.writeContract({
-          address: ADDRESSES.WETH,
-          abi: ERC20_ABI,
-          functionName: 'approve',
-          args: [ADDRESSES.CALLBACK, 0n],
-        })
-        await publicClient.waitForTransactionReceipt({ hash: txHash })
+        let txHash: string = ''
+        let method = ''
 
-        // Mark order as cancelled in index
+        // Prefer on-chain cancel via OrderRegistry (cancels specific order + linked OCO)
+        if (ADDRESSES.ORDER_REGISTRY !== '0x0000000000000000000000000000000000000000') {
+          const hash = await walletClient.writeContract({
+            address: ADDRESSES.ORDER_REGISTRY,
+            abi: ORDER_REGISTRY_ABI,
+            functionName: 'cancelOrder',
+            args: [BigInt(orderId)],
+          })
+          await publicClient.waitForTransactionReceipt({ hash })
+          txHash = hash
+          method = 'OrderRegistry.cancelOrder (on-chain, cancels linked OCO too)'
+        } else {
+          // Fallback: revoke allowance for this specific amount (not set to 0)
+          // Read current allowance, subtract this order's amount
+          const currentAllowance = await publicClient.readContract({
+            address: ADDRESSES.WETH,
+            abi: ERC20_ABI,
+            functionName: 'allowance',
+            args: [getAccount().address, ADDRESSES.CALLBACK],
+          }) as bigint
+          const orderAmount = BigInt(Math.floor(parseFloat(order.amountIn) * 1e18))
+          const newAllowance = currentAllowance > orderAmount ? currentAllowance - orderAmount : 0n
+
+          const hash = await walletClient.writeContract({
+            address: ADDRESSES.WETH,
+            abi: ERC20_ABI,
+            functionName: 'approve',
+            args: [ADDRESSES.CALLBACK, newAllowance],
+          })
+          await publicClient.waitForTransactionReceipt({ hash })
+          txHash = hash
+          method = 'Allowance reduced (fallback, no OrderRegistry deployed)'
+        }
+
+        // Mark order as cancelled in local index
         cancelOrder(orderId)
 
         return JSON.stringify({
           success: true,
           orderId,
           txHash,
-          note: 'Allowance revoked. Reactive contract cannot execute without approval.',
+          method,
         })
       }
 

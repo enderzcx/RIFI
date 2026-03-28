@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { ConnectKitButton } from 'connectkit'
-import { useAccount, useWriteContract, useSwitchChain } from 'wagmi'
+import { useAccount, useWriteContract, useSwitchChain, useReadContract } from 'wagmi'
 import { parseEther } from 'viem'
 import { base } from 'wagmi/chains'
 
@@ -25,20 +25,37 @@ interface SignalData {
 
 const SESSION_MANAGER = '0x5810d1A3DAEfe21fB266aB00Ec74ca628637550e' as `0x${string}`
 const EXECUTOR = '0x0309dc91bB89750C317Ec69566bAF1613b57e6bB' as `0x${string}` // AI backend wallet
+const WETH = '0x4200000000000000000000000000000000000006' as `0x${string}`
+const USDC = '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913' as `0x${string}`
 const SESSION_ABI = [
-  { type: 'function', name: 'createSession', inputs: [{ name: 'executor', type: 'address' }, { name: 'maxPerTrade', type: 'uint256' }, { name: 'totalBudget', type: 'uint256' }, { name: 'duration', type: 'uint256' }], outputs: [], stateMutability: 'nonpayable' },
+  { type: 'function', name: 'createSession', inputs: [{ name: '_executor', type: 'address' }, { name: '_totalBudget', type: 'uint256' }, { name: '_durationSeconds', type: 'uint256' }, { name: '_tokenPairs', type: 'address[]' }], outputs: [], stateMutability: 'nonpayable' },
   { type: 'function', name: 'revokeSession', inputs: [], outputs: [], stateMutability: 'nonpayable' },
+  { type: 'function', name: 'getSession', inputs: [{ name: 'user', type: 'address' }], outputs: [{ name: 'executor', type: 'address' }, { name: 'maxPerTrade', type: 'uint256' }, { name: 'totalBudget', type: 'uint256' }, { name: 'spent', type: 'uint256' }, { name: 'remaining', type: 'uint256' }, { name: 'dailyRemaining', type: 'uint256' }, { name: 'expiry', type: 'uint256' }, { name: 'active', type: 'bool' }, { name: 'expired', type: 'bool' }], stateMutability: 'view' },
 ] as const
 
 export function RightPanel() {
   const { isConnected, address } = useAccount()
   const [portfolio, setPortfolio] = useState<PortfolioData | null>(null)
   const [signals, setSignals] = useState<SignalData | null>(null)
-  const [sessionActive, setSessionActive] = useState(false)
   const [sessionPending, setSessionPending] = useState(false)
 
   const { writeContractAsync } = useWriteContract()
   const { switchChainAsync } = useSwitchChain()
+
+  // Read session status from chain
+  const { data: sessionData, refetch: refetchSession } = useReadContract({
+    address: SESSION_MANAGER,
+    abi: SESSION_ABI,
+    functionName: 'getSession',
+    args: address ? [address] : undefined,
+    chainId: base.id,
+    query: { enabled: !!address, refetchInterval: 30000 },
+  })
+
+  // sessionData is a tuple: [executor, maxPerTrade, totalBudget, spent, remaining, dailyRemaining, expiry, active, expired]
+  const sessionActive = !!(sessionData && sessionData[7] && !sessionData[8]) // active && !expired
+  const sessionRemaining = sessionData ? Number(sessionData[4]) / 1e18 : 0
+  const sessionExpiry = sessionData ? Number(sessionData[6]) : 0
 
   async function handleEnableAutoTrading() {
     if (!isConnected) return
@@ -53,13 +70,13 @@ export function RightPanel() {
         functionName: 'createSession',
         args: [
           EXECUTOR,
-          parseEther('0.005'),
-          parseEther('0.02'),
-          BigInt(86400),
+          parseEther('0.02'),     // totalBudget
+          BigInt(86400),          // 24h
+          [WETH, USDC],           // allowed pair
         ],
         chainId: base.id,
       })
-      setSessionActive(true)
+      await refetchSession()
     } catch (err) {
       console.error('Session creation failed:', err)
     }
@@ -75,7 +92,7 @@ export function RightPanel() {
         functionName: 'revokeSession',
         chainId: base.id,
       })
-      setSessionActive(false)
+      await refetchSession()
     } catch (err) {
       console.error('Session revoke failed:', err)
     }
@@ -254,7 +271,9 @@ export function RightPanel() {
           <div className="flex items-center gap-2">
             <div className={`w-2 h-2 rounded-full ${sessionActive ? 'bg-green-500' : 'bg-zinc-600'}`} />
             <span className="text-xs text-zinc-500">
-              {sessionPending ? 'Confirming...' : sessionActive ? 'Active (24h, 0.02 ETH budget)' : 'No active session'}
+              {sessionPending ? 'Confirming...' : sessionActive
+                ? `Active | ${sessionRemaining.toFixed(4)} ETH left | Expires ${new Date(sessionExpiry * 1000).toLocaleTimeString()}`
+                : 'No active session'}
             </span>
           </div>
           {isConnected && !sessionActive && (

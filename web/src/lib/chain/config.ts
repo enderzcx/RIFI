@@ -11,6 +11,7 @@ export const ADDRESSES = {
   WETH_USDC_PAIR: '0x88A43bbDF9D098eEC7bCEda4e2494615dfD9bB9C' as `0x${string}`,
   CALLBACK_PROXY: '0x0D3E76De6bC44309083cAAFdB49A088B8a250947' as `0x${string}`,
   SESSION_MANAGER: '0x5810d1A3DAEfe21fB266aB00Ec74ca628637550e' as `0x${string}`,
+  ORDER_REGISTRY: (process.env.ORDER_REGISTRY || '0x0000000000000000000000000000000000000000') as `0x${string}`,
 } as const
 
 // WETH/USDC pair: token0=WETH(18dec), token1=USDC(6dec)
@@ -39,6 +40,11 @@ export const ROUTER_ABI = [
 
 export const CALLBACK_ABI = [
   { type: 'function', name: 'stop', inputs: [{ name: '', type: 'address' }, { name: 'pair', type: 'address' }, { name: 'client', type: 'address' }, { name: 'is_token0', type: 'bool' }, { name: 'coefficient', type: 'uint256' }, { name: 'threshold', type: 'uint256' }], outputs: [], stateMutability: 'nonpayable' },
+] as const
+
+export const ORDER_REGISTRY_ABI = [
+  { type: 'function', name: 'cancelOrder', inputs: [{ name: 'orderId', type: 'uint256' }], outputs: [], stateMutability: 'nonpayable' },
+  { type: 'function', name: 'orders', inputs: [{ name: '', type: 'uint256' }], outputs: [{ name: 'reactiveContract', type: 'address' }, { name: 'pair', type: 'address' }, { name: 'client', type: 'address' }, { name: 'isStopLoss', type: 'bool' }, { name: 'sellToken0', type: 'bool' }, { name: 'coefficient', type: 'uint256' }, { name: 'threshold', type: 'uint256' }, { name: 'amount', type: 'uint256' }, { name: 'linkedOrderId', type: 'uint256' }, { name: 'active', type: 'bool' }], stateMutability: 'view' },
 ] as const
 
 export const SESSION_MANAGER_ABI = [
