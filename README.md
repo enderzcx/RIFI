@@ -19,6 +19,26 @@ Traditional DEX stop-loss requires a centralized backend to monitor prices. If t
 
 ## How It Works
 
+### Sentinel Mode (Autonomous)
+
+```
+Every 15 min — VPS Intelligence Pipeline
+         │
+         ├── 27+ sources (FRED/VIX, GDELT, news, Twitter, on-chain)
+         ├── Qwen 0.8b: filter + compress → structured signal JSON
+         └── GPT-5.4: analyze → { action, confidence, reason }
+                    │
+                    │ push_worthy = true?
+                    ▼
+         SessionVault.spendFromSession()   ← enforces budget on-chain
+         Uniswap V2 swap / set_stop_loss()
+                    │
+                    ▼
+         SSE push → Chat displays decision + TX hash
+```
+
+### Chat Mode (User-directed)
+
 ```
 User: "Buy 0.1 ETH, set stop-loss at $2000"
          │
