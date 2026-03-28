@@ -30,7 +30,7 @@ Every 15 min — VPS Intelligence Pipeline
                     │ push_worthy = true?
                     ▼
          POST /api/auto-trade  (Bearer token auth)
-         SessionVault.spendFromSession()   ← enforces budget on-chain
+         SessionManager.executeSwap()   ← enforces budget on-chain
          Uniswap V2 swap / set_stop_loss()
                     │
                     ▼
@@ -70,7 +70,7 @@ User: "Buy 0.1 ETH, set stop-loss at $2000"
 |----------|---------|
 | StopOrderCallback | [`0x9702220849b78318d7596B0F6503081DeE0a64f3`](https://basescan.org/address/0x9702220849b78318d7596B0F6503081DeE0a64f3) |
 | OrderRegistry | [`0xcE9720Ae1185e8E8c5739A5d3f88D75F3823D698`](https://basescan.org/address/0xcE9720Ae1185e8E8c5739A5d3f88D75F3823D698) |
-| SessionVault | [`0xEF1581bfDfC71b079247Df9b5e6127D686fd0682`](https://basescan.org/address/0xEF1581bfDfC71b079247Df9b5e6127D686fd0682) |
+| SessionManager | [`0x5810d1A3DAEfe21fB266aB00Ec74ca628637550e`](https://basescan.org/address/0x5810d1A3DAEfe21fB266aB00Ec74ca628637550e) |
 | Callback Proxy | [`0x0D3E76De6bC44309083cAAFdB49A088B8a250947`](https://basescan.org/address/0x0D3E76De6bC44309083cAAFdB49A088B8a250947) |
 | WETH/USDC Pair | `0x88A43bbDF9D098eEC7bCEda4e2494615dfD9bB9C` |
 
@@ -110,7 +110,7 @@ User: "Buy 0.1 ETH, set stop-loss at $2000"
 | `StopOrderCallback.sol` | Callback executor: double price verification, configurable slippage, graceful balance/allowance failure, try-catch swap with token refund |
 | `PairOrderManager.sol` | Reactive contract: subscribes to Uniswap Sync events, manages multi-order state, single-trigger protection |
 | `OrderRegistry.sol` | On-chain order ledger, OCO (one-cancels-other) linked orders |
-| `SessionVault.sol` | AI session key: user grants limited trading rights (maxPerTrade, totalBudget, expiry) |
+| `SessionVault.sol` | Session key budget enforcement: user grants AI limited trading rights (maxPerTrade, totalBudget, expiry) |
 | `ArbitrumStopOrderCallback.sol` | Arbitrum variant with retry logic |
 | `ArbitrumStopOrderReactive.sol` | Arbitrum variant reactive monitor |
 
@@ -148,9 +148,9 @@ cd web && cp .env.example .env.local && npm install && npm run dev
 Every 15 minutes, the Sentinel agent:
 1. Aggregates 27+ data sources (FRED/VIX, GDELT, crypto news, Twitter sentiment)
 2. LLM analyzes and decides — confidence score, action, reason
-3. If `push_worthy`: executes autonomously via SessionVault on-chain
+3. If `push_worthy`: executes autonomously via SessionManager on-chain
 
-User controls: `maxPerTrade`, `totalBudget`, `expiry` — enforced by SessionVault contract.
+User controls: `maxPerTrade`, `totalBudget`, `expiry` — enforced on-chain by SessionManager contract.
 
 ---
 
