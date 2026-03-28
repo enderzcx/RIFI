@@ -16,3 +16,7 @@ cty.html
 contracts/
 ARCHITECTURE-FULL.md
 EDGE-CASE-AUDIT.md
+ARCHITECTURE.md
+arb-stop-order-test/
+sepolia-stop-order-test/
+base-stop-order-test/
