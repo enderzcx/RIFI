@@ -12,3 +12,7 @@ dist/
 __pycache__/
 *.pyc
 cache/
+cty.html
+contracts/
+ARCHITECTURE-FULL.md
+EDGE-CASE-AUDIT.md
