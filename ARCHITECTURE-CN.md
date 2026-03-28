@@ -43,11 +43,11 @@
 │  (canServerExecute)      (手动模式)                           │
 │    │                       │                                 │
 │    │  market_swap:         │  market_swap:                   │
-│    │  → 服务器直接调        │  → 返回 sign_request            │
+│    │  → AI 直接调           │  → 返回 sign_request            │
 │    │    Uniswap swap       │  → 前端弹 MetaMask 签名         │
 │    │                       │                                 │
 │    │  set_stop_loss:       │  set_stop_loss:                 │
-│    │  → 服务器部署          │  → 返回 approve tx (Base)       │
+│    │  → AI 代部署          │  → 返回 approve tx (Base)       │
 │    │    Reactive 合约      │  → 返回 deploy tx (RNK 1597)    │
 │    │    (client=用户地址)   │  → 前端依次弹 MetaMask 签名     │
 │    │                       │                                 │
@@ -149,7 +149,7 @@ VPS 情报管线每 15 分钟分析一次，满足条件时自动触发交易，
 │      链上约束执行)                                            │
 │          │                                                   │
 │     set_stop_loss()                                          │
-│     (服务器部署 Reactive                                      │
+│     (AI 代部署 Reactive                                      │
 │      client=用户地址)                                         │
 │          │                                                   │
 │  3. 如果执行了交易：                                          │
@@ -189,7 +189,7 @@ VPS 情报管线每 15 分钟分析一次，满足条件时自动触发交易，
 │     → 有 Session 时：用户已在 Enable Auto Trading 时预授权    │
 │     → 无 Session 时：前端弹 MetaMask 签 approve              │
 │                                                              │
-│  2. 服务器在 Reactive Network (1597) 部署合约                 │
+│  2. AI 在 Reactive Network (1597) 代用户部署合约              │
 │     → PairOrderManager 或 BaseStopOrderReactive              │
 │     → 构造参数中 client = 用户钱包地址                        │
 │     → 付 0.1 REACT 作为订阅费                                │
@@ -273,7 +273,7 @@ VPS 情报管线每 15 分钟分析一次，满足条件时自动触发交易，
 ```
 1. 用户创建 Session → 同时 approve WETH/USDC 给 Router + Callback
 2. AI 调用 set_stop_loss(数量, 阈值, 用户地址)
-3. 服务器在 Reactive 网络部署监听合约（client = 用户地址）
+3. AI 在 Reactive 网络代用户部署监听合约（client = 用户地址）
 4. PairOrderManager 监听 Base 上的 Uniswap Sync 事件
 5. 价格 <= 阈值 → 触发 StopOrderCallback.execute()
 6. Callback：再次验价 → transferFrom 用户 → swap → 发送到用户钱包
