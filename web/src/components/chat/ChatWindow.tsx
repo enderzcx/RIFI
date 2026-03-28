@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect, Suspense } from 'react'
 import ReactMarkdown from 'react-markdown'
 import { useSearchParams } from 'next/navigation'
-import { useAccount, useSendTransaction } from 'wagmi'
+import { useAccount, useSendTransaction, useSwitchChain } from 'wagmi'
 import { Message, ToolResult } from '@/lib/types'
 import { ToolCallCard } from './ToolCallCard'
 
@@ -71,6 +71,7 @@ function ChatInner() {
   const params = useSearchParams()
   const { address } = useAccount()
   const { sendTransactionAsync } = useSendTransaction()
+  const { switchChainAsync } = useSwitchChain()
   const loadId = params.get('session')
   const [sessionId] = useState(() => loadId || crypto.randomUUID())
   const [messages, setMessages] = useState<Message[]>(() => loadId ? loadSession(loadId) : [])
@@ -210,20 +211,32 @@ function ChatInner() {
         const r = tr.result as Record<string, unknown> | null
         if (r?.sign_request && Array.isArray(r.txs)) {
           try {
-            for (const tx of r.txs as Array<{ to: string; data: string; value: string; description: string }>) {
-              accContent += `\n\n**Signing:** ${tx.description}...\n`
+            for (const tx of r.txs as Array<{ to: string; data: string; value: string; chainId?: number; description: string }>) {
+              // Switch chain if needed
+              if (tx.chainId) {
+                accContent += `\n\n**Switching to chain ${tx.chainId === 1597 ? 'Reactive Network' : 'Base'}...**\n`
+                setStreaming({ tools: accTools, content: accContent })
+                try { await switchChainAsync({ chainId: tx.chainId }) } catch {}
+              }
+
+              accContent += `**Signing:** ${tx.description}...\n`
               setStreaming({ tools: accTools, content: accContent })
               const hash = await sendTransactionAsync({
-                to: tx.to as `0x${string}`,
+                to: tx.to ? tx.to as `0x${string}` : undefined,
                 data: tx.data as `0x${string}`,
                 value: BigInt(tx.value || '0'),
+                chainId: tx.chainId,
               })
               accContent += `TX: \`${hash}\`\n`
               setStreaming({ tools: accTools, content: accContent })
             }
+            // Switch back to Base after all txs
+            try { await switchChainAsync({ chainId: 8453 }) } catch {}
             accContent += '\n**All transactions signed successfully.**\n'
             setStreaming({ tools: accTools, content: accContent })
           } catch (signErr) {
+            // Switch back to Base on error too
+            try { await switchChainAsync({ chainId: 8453 }) } catch {}
             accContent += `\n**Signing failed:** ${signErr}\n`
             setStreaming({ tools: accTools, content: accContent })
           }

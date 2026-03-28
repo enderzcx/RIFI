@@ -16,6 +16,16 @@ export async function executeTool(name: string, args: Record<string, unknown>, u
   const wallet = userAddress || serverWallet
   const isServerWallet = wallet.toLowerCase() === serverWallet.toLowerCase()
 
+  // Check if user has an active session — if yes, server can execute on their behalf
+  let hasSession = isServerWallet // server wallet always has "implicit session"
+  if (!isServerWallet) {
+    try {
+      const session = await getSession(wallet)
+      hasSession = session.active && !session.expired
+    } catch {}
+  }
+  const canServerExecute = isServerWallet || hasSession
+
   try {
     switch (name) {
       case 'get_market_signals': {
@@ -57,12 +67,12 @@ export async function executeTool(name: string, args: Record<string, unknown>, u
         if (dir === 'sell' && amt < 0.001) return JSON.stringify({ error: `Amount ${amt} WETH too small (minimum 0.001)` })
         if (dir === 'buy' && amt < 2) return JSON.stringify({ error: `Amount ${amt} USDC too small (minimum 2 USDC)` })
 
-        if (isServerWallet) {
-          // Server wallet: execute directly
+        if (canServerExecute) {
+          // Has session or is server wallet: execute directly
           const result = await marketSwap(dir, args.amount as string)
           return JSON.stringify(result)
         } else {
-          // User wallet: return unsigned txs for MetaMask signing
+          // No session: return unsigned txs for MetaMask signing
           const { txs, expectedOutput } = await buildSwapTxs(dir, args.amount as string, wallet)
           return JSON.stringify({
             sign_request: true,
@@ -74,32 +84,31 @@ export async function executeTool(name: string, args: Record<string, unknown>, u
       }
 
       case 'set_stop_loss': {
-        if (isServerWallet) {
-          const result = await setStopLoss(args.amount as string, args.threshold as number)
+        if (canServerExecute) {
+          // Server deploys reactive contract with client=user's wallet
+          const result = await setStopLoss(args.amount as string, args.threshold as number, wallet)
           trackOrder({ pair: ADDRESSES.WETH_USDC_PAIR, client: wallet, isStopLoss: true, threshold: args.threshold as number, amount: args.amount as string })
           return JSON.stringify(result)
         } else {
-          const { userTxs, serverAction } = await buildStopLossTxs(args.amount as string, args.threshold as number, wallet, true)
+          const { txs } = await buildStopLossTxs(args.amount as string, args.threshold as number, wallet, true)
           return JSON.stringify({
             sign_request: true,
-            txs: userTxs,
-            serverAction,
+            txs,
             description: `Set Stop Loss: ${args.amount} WETH @ $${args.threshold}`,
           })
         }
       }
 
       case 'set_take_profit': {
-        if (isServerWallet) {
-          const result = await setTakeProfit(args.amount as string, args.threshold as number)
+        if (canServerExecute) {
+          const result = await setTakeProfit(args.amount as string, args.threshold as number, wallet)
           trackOrder({ pair: ADDRESSES.WETH_USDC_PAIR, client: wallet, isStopLoss: false, threshold: args.threshold as number, amount: args.amount as string })
           return JSON.stringify(result)
         } else {
-          const { userTxs, serverAction } = await buildStopLossTxs(args.amount as string, args.threshold as number, wallet, false)
+          const { txs } = await buildStopLossTxs(args.amount as string, args.threshold as number, wallet, false)
           return JSON.stringify({
             sign_request: true,
-            txs: userTxs,
-            serverAction,
+            txs,
             description: `Set Take Profit: ${args.amount} WETH @ $${args.threshold}`,
           })
         }

@@ -72,8 +72,24 @@ export function RightPanel() {
     setSessionPending(true)
     try {
       try { await switchChainAsync({ chainId: base.id }) } catch {}
+
+      // Step 1: Create session
       await writeContractAsync({ address: SESSION_MANAGER, abi: SESSION_ABI, functionName: 'createSession',
         args: [EXECUTOR, parseEther('0.02'), BigInt(86400), [WETH, USDC]], chainId: base.id })
+
+      // Step 2: Approve WETH to Callback (for stop-loss/take-profit)
+      const CALLBACK = '0x9702220849b78318d7596B0F6503081DeE0a64f3' as `0x${string}`
+      const ERC20 = [{ type: 'function', name: 'approve', inputs: [{ name: 'spender', type: 'address' }, { name: 'amount', type: 'uint256' }], outputs: [{ type: 'bool' }], stateMutability: 'nonpayable' }] as const
+      await writeContractAsync({ address: WETH, abi: ERC20, functionName: 'approve',
+        args: [CALLBACK, parseEther('1')], chainId: base.id }) // approve 1 WETH for SL/TP
+
+      // Step 3: Approve WETH + USDC to Uniswap Router (for swaps)
+      const ROUTER = '0x4752ba5DBc23f44D87826276BF6Fd6b1C372aD24' as `0x${string}`
+      await writeContractAsync({ address: WETH, abi: ERC20, functionName: 'approve',
+        args: [ROUTER, parseEther('1')], chainId: base.id })
+      await writeContractAsync({ address: USDC, abi: ERC20, functionName: 'approve',
+        args: [ROUTER, BigInt(1000 * 1e6)], chainId: base.id }) // 1000 USDC
+
       await refetchSession()
     } catch (err) { console.error('Session creation failed:', err) }
     setSessionPending(false)
