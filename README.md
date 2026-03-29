@@ -44,11 +44,13 @@ Traditional DEX stop-loss requires a centralized backend to monitor prices. Serv
 ```
 Every 15 min — Intelligence Pipeline
          │
-         ├── 27+ sources (FRED/VIX, GDELT, news, Twitter, on-chain)
+         ├── Crucix (27+ OSINT sources)
+         ├── OpenNews / 6551.io (AI-scored crypto news)
+         ├── OnchainOS (on-chain analytics)
          └── LLM: analyze → { action, confidence, push_worthy }
                     │
-                    ├── Conservative: trade only on FLASH signals, confidence > 70
-                    └── Aggressive: trade on PRIORITY+ signals, confidence > 50
+                    ├── Conservative: FLASH signals only, confidence > 70
+                    └── Aggressive: PRIORITY+ signals, confidence > 50
                     │
                     ▼
          SessionManager.executeSwap() on-chain
@@ -60,10 +62,10 @@ Every 15 min — Intelligence Pipeline
 ```
 User: "Set stop-loss at $1800"
          │
-         ├── Approve WETH to Callback (Base) — user pre-approved via Session setup
-         └── Deploy Reactive contract (Reactive Network 1597) — server deploys, client = user
+         ├── Approve WETH to Callback (Base)
+         └── AI deploys Reactive contract (RNK 1597, client = user)
                     │
-                    │ Monitors Uniswap WETH/USDC Sync events
+                    │ Monitors Uniswap WETH/USDC Sync events forever
                     │ Every swap: "Is price <= $1800?"
                     │
                     └── YES → StopOrderCallback.execute() on Base
@@ -71,6 +73,27 @@ User: "Set stop-loss at $1800"
                                    ├── Swap WETH → USDC
                                    └── Send to user wallet
 ```
+
+---
+
+## AI Tools (14 total)
+
+| Tool | Source | Purpose |
+|------|--------|---------|
+| `get_market_signals` | Crucix + OpenNews → LLM | 27-source AI-analyzed market summary |
+| `get_crypto_news` | OpenNews / 6551.io | Raw AI-scored crypto news with links |
+| `get_crucix_data` | Crucix OSINT Engine | Raw macro data: VIX, BTC, oil, conflicts, TG alerts |
+| `get_onchain_data` | OnchainOS | On-chain analytics: whales, holders, smart money |
+| `get_price` | Uniswap V2 (Base) | Real-time WETH/USDC price + pool reserves |
+| `get_portfolio` | Base RPC | User wallet balances (WETH, USDC, ETH) |
+| `market_swap` | Uniswap V2 | Execute swap (auto or manual signing) |
+| `session_swap` | SessionManager | Autonomous swap within budget |
+| `set_stop_loss` | Reactive Network | Deploy decentralized stop-loss contract |
+| `set_take_profit` | Reactive Network | Deploy decentralized take-profit contract |
+| `get_active_orders` | OrderRegistry | List active SL/TP orders |
+| `cancel_order` | OrderRegistry | Cancel specific order |
+| `get_session` | SessionManager | Check session budget and status |
+| `update_memory` | Local storage | Persist user preferences and trading patterns |
 
 ---
 
@@ -118,10 +141,10 @@ Sold 0.001 WETH → 2.112 USDC, block 43860043
 
 | File | Purpose |
 |------|---------|
-| `StopOrderCallback.sol` | Callback executor: double price verification, configurable slippage, try-catch swap with token refund |
-| `PairOrderManager.sol` | Reactive contract: subscribes to Uniswap Sync events, multi-order state, single-trigger protection |
-| `OrderRegistry.sol` | On-chain order ledger, OCO (one-cancels-other) linked orders |
-| `SessionVault.sol` | Session key: user grants AI limited trading rights (maxPerTrade, totalBudget, expiry) |
+| `StopOrderCallback.sol` | Callback: double price verify, configurable slippage, try-catch swap with token refund |
+| `PairOrderManager.sol` | Reactive: subscribes to Uniswap Sync events, multi-order state, single-trigger protection |
+| `OrderRegistry.sol` | Order ledger, OCO (one-cancels-other) linked orders |
+| `SessionVault.sol` | Session key budget enforcement (maxPerTrade, totalBudget, expiry) |
 
 ---
 
@@ -143,12 +166,21 @@ curl -L https://foundry.paradigm.xyz | bash && foundryup && forge install
 
 - **Multi-wallet**: Any wallet connects and trades with its own assets
 - **Dual mode**: Session Key (AI auto-executes) or Manual (MetaMask signs each tx)
-- **Sentinel Mode**: Conservative / Aggressive autonomous trading
+- **Sentinel Mode**: Conservative / Aggressive autonomous trading with two strategies
 - **Reactive SL/TP**: Decentralized, runs forever without backend
 - **Session Key**: On-chain budget enforcement (per-trade limit, total cap, expiry)
 - **Streaming UI**: Tool execution visible step-by-step in real-time
-- **14 AI tools**: Market signals, crypto news, Crucix raw data, on-chain analytics, price, portfolio, swap, stop-loss, take-profit, session swap, orders, cancel, memory, session status
-- **Data sources**: Crucix (27+ OSINT), OpenNews/6551.io (AI-scored crypto news), OnchainOS (on-chain analytics), Uniswap V2 (real-time price)
+- **14 AI tools**: Independent access to news, macro data, on-chain analytics, trading, and memory
+- **AI Memory**: Learns user preferences, risk tolerance, and trading patterns across sessions
+
+## Data Sources
+
+| Source | Data | Usage |
+|--------|------|-------|
+| Crucix (27+ OSINT) | FRED/VIX, GDELT, ACLED, energy, Telegram, Reddit | Macro risk + geopolitical signals |
+| OpenNews / 6551.io | AI-scored crypto news with sentiment signals | News analysis with clickable source links |
+| OnchainOS | Whale movements, holder distribution, DEX volume | On-chain technical analysis |
+| Uniswap V2 | WETH/USDC pair reserves | Real-time price + liquidity |
 
 ## Tech Stack
 
@@ -160,3 +192,4 @@ curl -L https://foundry.paradigm.xyz | bash && foundryup && forge install
 | Blockchain | Base (8453) + Reactive Network (1597) |
 | Contracts | Solidity 0.8+, Foundry, OpenZeppelin |
 | Real-time | Server-Sent Events (SSE) |
+| Intelligence | Crucix, OpenNews, OnchainOS |
