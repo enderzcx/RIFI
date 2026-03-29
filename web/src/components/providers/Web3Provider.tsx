@@ -1,6 +1,7 @@
 'use client'
 
-import { WagmiProvider, createConfig, http, defineChain } from 'wagmi'
+import { WagmiProvider, createConfig, http } from 'wagmi'
+import { defineChain } from 'viem'
 import { base } from 'wagmi/chains'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { ConnectKitProvider, getDefaultConfig } from 'connectkit'
