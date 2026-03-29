@@ -54,14 +54,16 @@ export function ToolCallCard({ tool, result }: ToolResult) {
       return (
         <CardTx icon={<ShieldAlert />} color="red"
           label={`Stop Loss: ${r.amount} @ $${r.threshold}`}
-          txHash={r.reactiveTxHash as string || r.txHash as string} />
+          txHash={r.reactiveTxHash as string || r.txHash as string}
+          chain="reactive" />
       )
 
     case 'set_take_profit':
       return (
         <CardTx icon={<Target />} color="green"
           label={`Take Profit: ${r.amount} @ $${r.threshold}`}
-          txHash={r.reactiveTxHash as string || r.txHash as string} />
+          txHash={r.reactiveTxHash as string || r.txHash as string}
+          chain="reactive" />
       )
 
     case 'get_session': {
@@ -133,8 +135,11 @@ function Card({ icon, color, label, sub }: { icon: React.ReactNode; color: strin
   )
 }
 
-function CardTx({ icon, color, label, txHash }: { icon: React.ReactNode; color: string; label: string; txHash?: string }) {
+function CardTx({ icon, color, label, txHash, chain = 'base' }: { icon: React.ReactNode; color: string; label: string; txHash?: string; chain?: 'base' | 'reactive' }) {
   const c = COLORS[color] || COLORS.zinc
+  const explorerUrl = chain === 'reactive'
+    ? `https://kopli.reactscan.net/tx/${txHash}`
+    : `https://basescan.org/tx/${txHash}`
   return (
     <div className={`flex items-center gap-3 ${c.bg} border ${c.border} rounded-xl px-3.5 py-2.5 my-1 transition-colors`}>
       <div className={`${c.icon} shrink-0`}>
@@ -145,7 +150,7 @@ function CardTx({ icon, color, label, txHash }: { icon: React.ReactNode; color: 
       </div>
       {txHash && txHash !== '0x0000000000000000000000000000000000000000000000000000000000000000' && (
         <a
-          href={`https://basescan.org/tx/${txHash}`}
+          href={explorerUrl}
           target="_blank"
           rel="noopener noreferrer"
           className="flex items-center gap-1 text-[11px] text-blue-400 hover:text-blue-300 transition-colors shrink-0"
