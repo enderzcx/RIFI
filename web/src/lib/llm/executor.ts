@@ -187,7 +187,19 @@ export async function executeTool(name: string, args: Record<string, unknown>, u
         const limit = (args.limit as number) || 10
         try {
           const res = await fetch(`${VPS_API}/api/news?limit=${Math.min(limit, 20)}`, { signal: AbortSignal.timeout(8000) })
-          if (res.ok) return JSON.stringify(await res.json())
+          if (res.ok) {
+            const raw = await res.json() as Array<Record<string, unknown>>
+            const cleaned = raw.map((n) => ({
+              title: n.text || n.title || '',
+              summary: (n.aiRating as Record<string, unknown>)?.summary || '',
+              score: (n.aiRating as Record<string, unknown>)?.score || 0,
+              signal: (n.aiRating as Record<string, unknown>)?.signal || 'neutral',
+              source: n.source || n.newsType || '',
+              link: n.link || '',
+              time: n.ts || '',
+            }))
+            return JSON.stringify(cleaned)
+          }
         } catch {}
         return JSON.stringify({ error: 'News service unavailable' })
       }
