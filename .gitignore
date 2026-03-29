@@ -22,3 +22,6 @@ sepolia-stop-order-test/
 base-stop-order-test/
 mockup-*.html
 mockups.html
+CLAUDE.md
+web/CLAUDE.md
+web/.claude/
