@@ -130,4 +130,39 @@ export const tools: ChatCompletionTool[] = [
       },
     },
   },
+  {
+    type: 'function',
+    function: {
+      name: 'get_crypto_news',
+      description: 'Get latest AI-scored crypto news from OpenNews (6551.io). Each news item has a sentiment score (0-100) and directional signal (long/short/neutral). Use when user asks about news, recent events, or market catalysts.',
+      parameters: {
+        type: 'object',
+        properties: {
+          limit: { type: 'number', description: 'Number of news items to return (default 10, max 20)' },
+        },
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_crucix_data',
+      description: 'Get raw macro and geopolitical data from Crucix 27-source OSINT engine. Returns: market prices (VIX, BTC, ETH, S&P500, Gold), energy (WTI oil, natural gas), conflict data (ACLED events/fatalities), Telegram urgent signals, and more. Use for detailed macro breakdown beyond the summary in get_market_signals.',
+      parameters: { type: 'object', properties: {} },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_onchain_data',
+      description: 'Get on-chain analytics for a token: whale movements, holder distribution, smart money flows, DEX volume. Powered by OnchainOS. Use for technical and on-chain analysis.',
+      parameters: {
+        type: 'object',
+        properties: {
+          token: { type: 'string', description: 'Token symbol, e.g. ETH, BTC' },
+        },
+        required: ['token'],
+      },
+    },
+  },
 ]

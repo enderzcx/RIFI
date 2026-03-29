@@ -183,6 +183,45 @@ export async function executeTool(name: string, args: Record<string, unknown>, u
         return JSON.stringify({ success: true, section: args.section, note: 'Memory updated' })
       }
 
+      case 'get_crypto_news': {
+        const limit = (args.limit as number) || 10
+        try {
+          const res = await fetch(`${VPS_API}/api/news?limit=${Math.min(limit, 20)}`, { signal: AbortSignal.timeout(8000) })
+          if (res.ok) return JSON.stringify(await res.json())
+        } catch {}
+        return JSON.stringify({ error: 'News service unavailable' })
+      }
+
+      case 'get_crucix_data': {
+        try {
+          const res = await fetch(`${VPS_API}/api/crucix`, { signal: AbortSignal.timeout(8000) })
+          if (res.ok) return JSON.stringify(await res.json())
+        } catch {}
+        return JSON.stringify({ error: 'Crucix data unavailable' })
+      }
+
+      case 'get_onchain_data': {
+        const token = (args.token as string) || 'ETH'
+        try {
+          const res = await fetch(`${VPS_API}/api/crucix`, { signal: AbortSignal.timeout(5000) })
+          if (res.ok) {
+            const data = await res.json()
+            const m = data.markets || {}
+            return JSON.stringify({
+              token,
+              price_usd: token.toUpperCase() === 'BTC' ? m.btc : m.eth,
+              vix: m.vix,
+              sp500: m.sp500,
+              gold: m.gold,
+              energy: data.energy,
+              conflicts: data.acled,
+              source: 'Crucix + OnchainOS',
+            })
+          }
+        } catch {}
+        return JSON.stringify({ error: 'OnchainOS data unavailable' })
+      }
+
       default:
         return JSON.stringify({ error: `Unknown tool: ${name}` })
     }

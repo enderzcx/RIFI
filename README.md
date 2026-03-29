@@ -147,7 +147,8 @@ curl -L https://foundry.paradigm.xyz | bash && foundryup && forge install
 - **Reactive SL/TP**: Decentralized, runs forever without backend
 - **Session Key**: On-chain budget enforcement (per-trade limit, total cap, expiry)
 - **Streaming UI**: Tool execution visible step-by-step in real-time
-- **27+ data sources**: FRED, GDELT, crypto news, Twitter sentiment
+- **14 AI tools**: Market signals, crypto news, Crucix raw data, on-chain analytics, price, portfolio, swap, stop-loss, take-profit, session swap, orders, cancel, memory, session status
+- **Data sources**: Crucix (27+ OSINT), OpenNews/6551.io (AI-scored crypto news), OnchainOS (on-chain analytics), Uniswap V2 (real-time price)
 
 ## Tech Stack
 

@@ -4,7 +4,8 @@ import { ToolResult } from '@/lib/types'
 import {
   DollarSign, Briefcase, Radio, ClipboardList,
   ArrowLeftRight, ShieldAlert, Target, KeyRound,
-  Bot, Brain, Wrench, ExternalLink, Check
+  Bot, Brain, Wrench, ExternalLink, Check,
+  Newspaper, Globe, Activity
 } from 'lucide-react'
 
 export function ToolCallCard({ tool, result }: ToolResult) {
@@ -85,6 +86,19 @@ export function ToolCallCard({ tool, result }: ToolResult) {
 
     case 'update_memory':
       return <Card icon={<Brain />} color="pink" label="Memory updated" sub={String(r.section)} />
+
+    case 'get_crypto_news': {
+      const items = Array.isArray(r) ? r : []
+      return <Card icon={<Newspaper />} color="amber" label={`${items.length} crypto news loaded`} sub="OpenNews (6551.io)" />
+    }
+
+    case 'get_crucix_data': {
+      const m = (r as Record<string, unknown>).markets as Record<string, number> | undefined
+      return <Card icon={<Globe />} color="blue" label="Crucix 27-source data" sub={m ? `BTC $${m.btc?.toLocaleString()} | VIX ${m.vix}` : 'Loaded'} />
+    }
+
+    case 'get_onchain_data':
+      return <Card icon={<Activity />} color="cyan" label={`${(r as Record<string, unknown>).token || 'Token'} on-chain data`} sub={(r as Record<string, unknown>).source as string || 'OnchainOS'} />
 
     default:
       return <Card icon={<Wrench />} color="zinc" label={tool} sub="completed" />
