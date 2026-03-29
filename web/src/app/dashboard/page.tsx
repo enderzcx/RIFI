@@ -29,7 +29,6 @@ export default function DashboardPage() {
   const [portfolio, setPortfolio] = useState<Portfolio | null>(null)
   const [signals, setSignals] = useState<Signals | null>(null)
   const [decisions, setDecisions] = useState<Array<{ time: string; content: string }>>([])
-  const [loading, setLoading] = useState(false)
 
   useEffect(() => {
     fetchPortfolio()
@@ -53,23 +52,19 @@ export default function DashboardPage() {
     } catch {}
   }
 
-  async function triggerAutoOnce() {
-    setLoading(true)
-    try {
-      const res = await fetch('/api/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          messages: [{ role: 'user', content: 'Run one auto-analysis cycle: check signals, price, portfolio, and decide whether to trade. Be concise.' }]
-        }),
-      })
-      const data = await res.json()
-      setDecisions(prev => [{ time: new Date().toLocaleTimeString(), content: data.content }, ...prev].slice(0, 20))
-    } catch (err) {
-      setDecisions(prev => [{ time: new Date().toLocaleTimeString(), content: `Error: ${err}` }, ...prev])
+  // Listen for auto-trade SSE events
+  useEffect(() => {
+    const es = new EventSource('/api/events')
+    es.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data)
+        if (data.type === 'SIGNAL_ALERT' && data.data?.decision) {
+          setDecisions(prev => [{ time: new Date().toLocaleTimeString(), content: data.data.decision }, ...prev].slice(0, 20))
+        }
+      } catch {}
     }
-    setLoading(false)
-  }
+    return () => es.close()
+  }, [])
 
   const riskColor = (v: number) => v > 70 ? 'text-red-400' : v > 40 ? 'text-yellow-400' : 'text-green-400'
   const sentColor = (v: number) => v > 60 ? 'text-green-400' : v > 40 ? 'text-zinc-400' : 'text-red-400'
@@ -81,16 +76,7 @@ export default function DashboardPage() {
         {/* Top bar */}
         <div className="flex items-center justify-between px-8 py-4 border-b border-white/[0.06]">
           <h2 className="text-sm font-medium text-zinc-400">Dashboard</h2>
-          <div className="flex items-center gap-3">
-            <button
-              onClick={triggerAutoOnce}
-              disabled={loading}
-              className="text-xs bg-blue-600 hover:bg-blue-500 disabled:bg-zinc-700 text-white px-4 py-2 rounded-lg transition-colors"
-            >
-              {loading ? 'Running...' : 'Run Analysis'}
-            </button>
-            <ConnectKitButton />
-          </div>
+          <ConnectKitButton />
         </div>
 
         {/* Grid */}
@@ -185,7 +171,7 @@ export default function DashboardPage() {
           <div className="glass-card p-5">
             <h3 className="text-[11px] uppercase tracking-wider text-zinc-500 font-medium mb-3">AI Decision Log</h3>
             {decisions.length === 0 ? (
-              <p className="text-xs text-zinc-600">Click &quot;Run Analysis&quot; to trigger an AI decision cycle.</p>
+              <p className="text-xs text-zinc-600">Sentinel auto-trade decisions will appear here.</p>
             ) : (
               <div className="space-y-3 max-h-80 overflow-y-auto">
                 {decisions.map((d, i) => (
