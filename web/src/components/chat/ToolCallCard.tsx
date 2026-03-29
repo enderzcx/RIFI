@@ -138,7 +138,7 @@ function Card({ icon, color, label, sub }: { icon: React.ReactNode; color: strin
 function CardTx({ icon, color, label, txHash, chain = 'base' }: { icon: React.ReactNode; color: string; label: string; txHash?: string; chain?: 'base' | 'reactive' }) {
   const c = COLORS[color] || COLORS.zinc
   const explorerUrl = chain === 'reactive'
-    ? `https://kopli.reactscan.net/tx/${txHash}`
+    ? `https://reactscan.net/tx/${txHash}`
     : `https://basescan.org/tx/${txHash}`
   return (
     <div className={`flex items-center gap-3 ${c.bg} border ${c.border} rounded-xl px-3.5 py-2.5 my-1 transition-colors`}>
