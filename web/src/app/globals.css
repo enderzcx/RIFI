@@ -105,6 +105,17 @@ input:focus, textarea:focus {
   box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.08);
 }
 
+/* Markdown links — make them obvious */
+.prose a, .prose-invert a {
+  color: #60a5fa;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  transition: color 0.15s;
+}
+.prose a:hover, .prose-invert a:hover {
+  color: #93bbfc;
+}
+
 /* Selection */
 ::selection {
   background: rgba(139, 92, 246, 0.3);
