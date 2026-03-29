@@ -1,5 +1,10 @@
 # RIFI — Reactive Intelligence for Financial Instruments
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Base](https://img.shields.io/badge/Chain-Base-0052FF)](https://base.org)
+[![Reactive](https://img.shields.io/badge/Reactive_Network-1597-purple)](https://reactive.network)
+[![Demo](https://img.shields.io/badge/Live_Demo-online-green)](https://enderzcxai.duckdns.org)
+
 > **AI decides. Reactive executes.**
 
 AI-native autonomous trading agent on Base. Connect any wallet, enable Session Key, and let the AI trade for you — swap, stop-loss, take-profit, all on-chain. Reactive Smart Contracts execute your orders 24/7, even if the frontend goes offline.
@@ -76,12 +81,26 @@ User: "Set stop-loss at $1800"
 
 ---
 
+## Intelligence Sources
+
+RIFI aggregates multiple real-time data sources to power AI trading decisions:
+
+| Source | Repository / Link | Data | Required |
+|--------|-------------------|------|----------|
+| **Crucix** | [github.com/enderzcx/Crucix](https://github.com/enderzcx/Crucix) | 27+ OSINT sources: FRED (VIX/CPI/yields), GDELT/ACLED (geopolitics), energy (WTI/gas), Reddit, Telegram, satellite, weather | Optional — AI uses fallback signals without it |
+| **OpenNews** | [6551.io](https://ai.6551.io) | AI-scored crypto news with sentiment (0-100) and directional signal (long/short/neutral) | Optional — requires API token |
+| **OnchainOS** | [OKX OnchainOS](https://www.okx.com/web3/discover/cryptopedia/onchain-os) | On-chain analytics: whale movements, holder distribution, smart money flows | Optional — basic data from Crucix fallback |
+| **Uniswap V2** | On-chain (Base) | Real-time WETH/USDC price from pool reserves | Built-in — no config needed |
+| **Reactive Network** | [reactive.network](https://reactive.network) | Cross-chain event monitoring for decentralized order execution | Built-in — contracts pre-deployed |
+
+---
+
 ## AI Tools (14 total)
 
 | Tool | Source | Purpose |
 |------|--------|---------|
 | `get_market_signals` | Crucix + OpenNews → LLM | 27-source AI-analyzed market summary |
-| `get_crypto_news` | OpenNews / 6551.io | Raw AI-scored crypto news with links |
+| `get_crypto_news` | OpenNews / 6551.io | Raw AI-scored crypto news with clickable links |
 | `get_crucix_data` | Crucix OSINT Engine | Raw macro data: VIX, BTC, oil, conflicts, TG alerts |
 | `get_onchain_data` | OnchainOS | On-chain analytics: whales, holders, smart money |
 | `get_price` | Uniswap V2 (Base) | Real-time WETH/USDC price + pool reserves |
@@ -94,6 +113,95 @@ User: "Set stop-loss at $1800"
 | `cancel_order` | OrderRegistry | Cancel specific order |
 | `get_session` | SessionManager | Check session budget and status |
 | `update_memory` | Local storage | Persist user preferences and trading patterns |
+
+---
+
+## Quick Start
+
+### Prerequisites
+
+- Node.js 18+
+- An OpenAI-compatible LLM API endpoint (OpenAI, local Ollama, etc.)
+- A wallet with ETH on Base (for gas)
+- [Foundry](https://book.getfoundry.sh/) (for contract deployment only)
+
+### 1. Clone & Install
+
+```bash
+git clone https://github.com/enderzcx/RIFI.git
+cd RIFI/web
+cp .env.example .env.local
+npm install
+```
+
+### 2. Configure `.env.local`
+
+```env
+# Required
+LLM_ENDPOINT=http://your-llm:8080/v1    # Any OpenAI-compatible API
+LLM_API_KEY=your-key
+PRIVATE_KEY=0x_your_wallet_key           # Backend executor wallet
+
+# Optional — for full intelligence pipeline
+VPS_API_URL=http://your-vps:3200         # If running VPS intelligence
+```
+
+Contract addresses are pre-filled — you can reuse the deployed contracts on Base.
+
+### 3. Run
+
+```bash
+npm run dev
+```
+
+Open [localhost:3000](http://localhost:3000) → Connect wallet → Start chatting.
+
+### 4. (Optional) Run Intelligence Pipeline
+
+For full Sentinel Mode with 27+ data sources:
+
+```bash
+# Terminal 1: Start Crucix (see github.com/enderzcx/Crucix)
+cd /path/to/Crucix && node server.mjs
+
+# Terminal 2: Start VPS API
+cd RIFI
+cp vps-api/.env.example vps-api/.env
+# Edit vps-api/.env with your API keys
+node vps-api-index.mjs
+```
+
+### 5. (Optional) Deploy Your Own Contracts
+
+```bash
+curl -L https://foundry.paradigm.xyz | bash && foundryup
+forge install
+
+# Deploy on Base
+forge script script/DeployBaseStopOrder.s.sol:DeployBase \
+  --rpc-url $BASE_RPC_URL --private-key $PRIVATE_KEY --broadcast -vvvv
+
+# Deploy on Reactive Network
+forge script script/DeployBaseStopOrder.s.sol:DeployReactive \
+  --rpc-url $REACTIVE_RPC --private-key $PRIVATE_KEY --broadcast -vvvv
+```
+
+---
+
+## What Works Without the VPS
+
+| Feature | Without VPS | With VPS |
+|---------|-------------|----------|
+| Chat with AI | ✅ | ✅ |
+| Check price | ✅ | ✅ |
+| View portfolio | ✅ | ✅ |
+| Market swap | ✅ | ✅ |
+| Stop-loss / Take-profit | ✅ | ✅ |
+| Session Key auto-trading | ✅ | ✅ |
+| Market intelligence signals | ⚠️ Fallback defaults | ✅ Real-time 27-source |
+| Crypto news | ❌ | ✅ |
+| Crucix macro data | ❌ | ✅ |
+| Sentinel Mode auto-trade | ❌ | ✅ |
 
 ---
 
@@ -148,39 +256,16 @@ Sold 0.001 WETH → 2.112 USDC, block 43860043
 
 ---
 
-## Deployment
-
-```bash
-curl -L https://foundry.paradigm.xyz | bash && foundryup && forge install
-```
-
-**Step 1 — Base:** `forge script script/DeployBaseStopOrder.s.sol:DeployBase --rpc-url $BASE_RPC_URL --private-key $PRIVATE_KEY --broadcast -vvvv`
-
-**Step 2 — Reactive:** `forge script script/DeployBaseStopOrder.s.sol:DeployReactive --rpc-url $REACTIVE_RPC --private-key $PRIVATE_KEY --broadcast -vvvv`
-
-**Step 3 — Web:** `cd web && cp .env.example .env.local && npm install && npm run dev`
-
----
-
 ## Key Features
 
 - **Multi-wallet**: Any wallet connects and trades with its own assets
 - **Dual mode**: Session Key (AI auto-executes) or Manual (MetaMask signs each tx)
-- **Sentinel Mode**: Conservative / Aggressive autonomous trading with two strategies
+- **Sentinel Mode**: Conservative / Aggressive autonomous trading
 - **Reactive SL/TP**: Decentralized, runs forever without backend
 - **Session Key**: On-chain budget enforcement (per-trade limit, total cap, expiry)
 - **Streaming UI**: Tool execution visible step-by-step in real-time
 - **14 AI tools**: Independent access to news, macro data, on-chain analytics, trading, and memory
 - **AI Memory**: Learns user preferences, risk tolerance, and trading patterns across sessions
-
-## Data Sources
-
-| Source | Data | Usage |
-|--------|------|-------|
-| Crucix (27+ OSINT) | FRED/VIX, GDELT, ACLED, energy, Telegram, Reddit | Macro risk + geopolitical signals |
-| OpenNews / 6551.io | AI-scored crypto news with sentiment signals | News analysis with clickable source links |
-| OnchainOS | Whale movements, holder distribution, DEX volume | On-chain technical analysis |
-| Uniswap V2 | WETH/USDC pair reserves | Real-time price + liquidity |
 
 ## Tech Stack
 
@@ -192,4 +277,10 @@ curl -L https://foundry.paradigm.xyz | bash && foundryup && forge install
 | Blockchain | Base (8453) + Reactive Network (1597) |
 | Contracts | Solidity 0.8+, Foundry, OpenZeppelin |
 | Real-time | Server-Sent Events (SSE) |
-| Intelligence | Crucix, OpenNews, OnchainOS |
+| Intelligence | [Crucix](https://github.com/enderzcx/Crucix), [OpenNews](https://ai.6551.io), OnchainOS |
+
+---
+
+## License
+
+MIT — see [LICENSE](LICENSE)
