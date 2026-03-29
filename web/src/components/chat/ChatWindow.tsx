@@ -273,8 +273,15 @@ function ChatInner() {
   }
 
   return (
-    <div className="flex flex-col h-full">
-      <div ref={scrollRef} className="flex-1 overflow-y-auto px-6 py-4">
+    <div className="flex flex-col h-full relative">
+      {/* Video background — always in DOM and playing, opacity fades with messages */}
+      <div className={`absolute inset-0 z-0 overflow-hidden transition-opacity duration-1000 pointer-events-none ${messages.length === 0 && !streaming ? 'opacity-100' : 'opacity-0'}`}>
+        <video autoPlay muted playsInline loop className="absolute inset-0 w-full h-full object-cover opacity-25">
+          <source src="https://d8j0ntlcm91z4.cloudfront.net/user_38xzZboKViGWJOttwIXH07lWA1P/hf_20260308_114720_3dabeb9e-2c39-4907-b747-bc3544e2d5b7.mp4" type="video/mp4" />
+        </video>
+        <div className="absolute inset-0" style={{background: 'linear-gradient(to bottom, hsl(260 87% 3%) 0%, hsl(260 87% 3% / 0.5) 40%, hsl(260 87% 3% / 0.85) 100%)'}} />
+      </div>
+      <div ref={scrollRef} className="flex-1 overflow-y-auto px-6 py-4 relative z-10">
         {messages.length === 0 && !streaming && (
           <div className="flex flex-col items-center pt-[20vh]">
             <h2 className="text-3xl font-semibold gradient-text mb-2">RIFI</h2>
