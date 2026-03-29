@@ -337,6 +337,8 @@ RIFI/
 │   │       ├── portfolio/route.ts    # 支持 ?wallet= 参数
 │   │       ├── orders/route.ts       # 按钱包筛选订单
 │   │       ├── sentinel-mode/route.ts# 哨兵模式切换
+│   │       ├── news/route.ts         # 代理 VPS 新闻（OpenNews 6551.io）
+│   │       ├── crucix/route.ts      # 代理 VPS Crucix 原始数据
 │   │       ├── events/route.ts       # SSE 推送（自动交易事件）
 │   │       └── signals/route.ts      # 代理 VPS 信号
 │   │
@@ -353,7 +355,7 @@ RIFI/
 │   └── src/lib/
 │       ├── llm/
 │       │   ├── executor.ts           # executeTool(名称, 参数, 用户地址)
-│       │   ├── tools.ts              # 11 个工具定义
+│       │   ├── tools.ts              # 14 个工具定义
 │       │   ├── system-prompt.ts      # AI 人设 + 规则
 │       │   └── client.ts             # OpenAI 兼容客户端
 │       ├── chain/
@@ -389,4 +391,25 @@ RIFI/
 | 区块链 | Base (8453) + Reactive Network (1597) |
 | 合约 | Solidity 0.8+, Foundry, OpenZeppelin (SafeERC20) |
 | 实时通信 | Server-Sent Events (SSE) |
-| 情报引擎 | 27+ OSINT 数据源（Crucix 聚合） |
+| 情报引擎 | [Crucix](https://github.com/enderzcx/Crucix) (27+ OSINT), [OpenNews/6551.io](https://ai.6551.io), OnchainOS |
+
+---
+
+## AI 工具清单（14 个）
+
+| 工具 | 数据源 | 用途 |
+|------|--------|------|
+| `get_market_signals` | Crucix + OpenNews → LLM | 27 源 AI 汇总信号 |
+| `get_crypto_news` | OpenNews / 6551.io | 原始 AI 评分新闻（带可点击链接） |
+| `get_crucix_data` | Crucix OSINT 引擎 | 宏观原始数据：VIX、BTC、油价、地缘冲突 |
+| `get_onchain_data` | OnchainOS | 链上分析：巨鲸、持仓分布、智能钱包 |
+| `get_price` | Uniswap V2 (Base) | 实时 WETH/USDC 价格 |
+| `get_portfolio` | Base RPC | 用户钱包余额 |
+| `market_swap` | Uniswap V2 | 执行 swap（自动或手动签名） |
+| `session_swap` | SessionManager | 预算内自主交易 |
+| `set_stop_loss` | Reactive Network | 部署去中心化止损合约 |
+| `set_take_profit` | Reactive Network | 部署去中心化止盈合约 |
+| `get_active_orders` | OrderRegistry | 查询活跃订单 |
+| `cancel_order` | OrderRegistry | 取消订单 |
+| `get_session` | SessionManager | 查询 Session 预算状态 |
+| `update_memory` | 本地存储 | 持久化用户偏好和交易模式 |

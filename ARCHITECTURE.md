@@ -202,6 +202,8 @@ RIFI/
 │   │       ├── portfolio/route.ts    # ?wallet= param support
 │   │       ├── orders/route.ts       # ?wallet= filter by client
 │   │       ├── sentinel-mode/route.ts# GET/POST mode toggle
+│   │       ├── news/route.ts         # Proxy VPS news (OpenNews 6551.io)
+│   │       ├── crucix/route.ts       # Proxy VPS Crucix raw data
 │   │       ├── events/route.ts       # SSE push for auto-trade events
 │   │       └── signals/route.ts      # Proxy VPS signals
 │   │
@@ -218,7 +220,7 @@ RIFI/
 │   └── src/lib/
 │       ├── llm/
 │       │   ├── executor.ts           # executeTool(name, args, userAddress)
-│       │   ├── tools.ts              # 11 tool definitions
+│       │   ├── tools.ts              # 14 tool definitions
 │       │   ├── system-prompt.ts      # AI persona + rules
 │       │   └── client.ts            # OpenAI-compatible client
 │       ├── chain/
