@@ -1549,8 +1549,8 @@ async function runRiskCheck(signal, traceId) {
       verdict = JSON.parse(jsonStr);
     } catch {
       // If can't parse, default to PASS with warning
-      console.warn(`[Risk] Could not parse verdict, defaulting to PASS. Raw: ${result.content.slice(0, 100)}`);
-      verdict = { verdict: 'PASS', reason: 'Risk agent parse error, defaulting PASS', risk_flags: ['parse_error'] };
+      console.warn(`[Risk] Could not parse verdict, defaulting to VETO (fail-closed). Raw: ${result.content.slice(0, 100)}`);
+      verdict = { verdict: 'VETO', reason: 'Risk agent parse error, defaulting VETO', risk_flags: ['parse_error'] };
     }
 
     const pass = verdict.verdict === 'PASS';
@@ -1564,8 +1564,8 @@ async function runRiskCheck(signal, traceId) {
 
     return { pass, reason: verdict.reason, risk_flags: verdict.risk_flags || [] };
   } catch (err) {
-    console.error(`[Risk] Agent error: ${err.message}, defaulting to PASS`);
-    return { pass: true, reason: `Risk agent error: ${err.message}`, risk_flags: ['agent_error'] };
+    console.error(`[Risk] Agent error: ${err.message}, defaulting to VETO (fail-closed)`);
+    return { pass: false, reason: `Risk agent error: ${err.message}`, risk_flags: ['agent_error'] };
   }
 }
 
@@ -2064,22 +2064,32 @@ async function triggerAutoTrade(signal) {
 
 // --- Bitget Auto-Trade Executor ---
 
+// Trading mutex — prevent analyst + scanner from trading simultaneously
+let _tradingLock = false;
+
 async function executeBitgetTrade(signal, traceId) {
   if (!BITGET_API_KEY) { console.log('[BitgetExec] No API key, skip'); return; }
+  if (_tradingLock) { console.log('[BitgetExec] Trading lock active, skip'); return; }
+  _tradingLock = true;
+  try { await _executeBitgetTradeInner(signal, traceId); } finally { _tradingLock = false; }
+}
+
+async function _executeBitgetTradeInner(signal, traceId) {
 
   const action = signal.recommended_action;
   const confidence = signal.confidence || 0;
 
   // Trade on actionable signals (Risk Agent already approved)
-  if (['hold'].includes(action)) {
-    console.log(`[BitgetExec] Action "${action}", skip`);
+  if (['hold', 'reduce_exposure'].includes(action)) {
+    console.log(`[BitgetExec] Action "${action}", skip (manage positions manually)`);
     return;
   }
 
-  // Determine trade params
-  const side = action === 'strong_buy' ? 'buy' : 'sell';
-  const tradeSide = action === 'strong_buy' ? 'open' : 'open'; // open long or open short
-  const holdSide = action === 'strong_buy' ? 'long' : 'short';
+  // Determine trade params — map actions to sides correctly
+  const isBuy = ['strong_buy', 'increase_exposure'].includes(action);
+  const side = isBuy ? 'buy' : 'sell';
+  const tradeSide = 'open';
+  const holdSide = isBuy ? 'long' : 'short';
 
   // Use ETH futures as default (affordable with small balance)
   const symbol = 'ETHUSDT';
@@ -2087,6 +2097,17 @@ async function executeBitgetTrade(signal, traceId) {
   const leverage = '10';
 
   try {
+    // Check existing positions — don't double up
+    try {
+      const posData = await bitgetRequest('GET', '/api/v2/mix/position/all-position?productType=USDT-FUTURES&marginCoin=USDT');
+      const positions = Array.isArray(posData) ? posData : (posData?.list || []);
+      const sameDirection = positions.find(p => p.symbol === symbol && p.holdSide === holdSide && parseFloat(p.total || '0') > 0);
+      if (sameDirection) {
+        console.log(`[BitgetExec] Already have ${holdSide} position on ${symbol}, skip`);
+        return;
+      }
+    } catch {}
+
     // Check balance first
     const accounts = await bitgetRequest('GET', '/api/v2/mix/account/accounts?productType=USDT-FUTURES');
     const usdtBal = accounts?.find(a => a.marginCoin === 'USDT');
@@ -2705,8 +2726,10 @@ async function scanMarketOpportunities() {
         const pendingData = await bitgetRequest('GET', '/api/v2/mix/order/orders-pending?productType=USDT-FUTURES');
         const pendingOrders = pendingData?.entrustedList || (Array.isArray(pendingData) ? pendingData : []);
         if (pendingOrders.length > 0) {
-          console.log(`[Scanner] Found ${pendingOrders.length} pending order(s). Cancelling to free margin for new opportunities...`);
-          for (const order of pendingOrders) {
+          // Only cancel limit/market orders, not TP/SL plan orders
+          const cancellable = pendingOrders.filter(o => o.orderType === 'limit' || o.orderType === 'market');
+          console.log(`[Scanner] Found ${pendingOrders.length} pending order(s), ${cancellable.length} cancellable (excluding TP/SL).`);
+          for (const order of cancellable) {
             try {
               await bitgetRequest('POST', '/api/v2/mix/order/cancel-order', {
                 symbol: order.symbol, productType: 'USDT-FUTURES', orderId: order.orderId,
@@ -2766,6 +2789,12 @@ function calcBollinger(closes, period = 20) {
 }
 
 async function runTechnicalTrading(opportunities) {
+  if (_tradingLock) { console.log('[TechTrading] Trading lock active, skip'); return; }
+  _tradingLock = true;
+  try { await _runTechnicalTradingInner(opportunities); } finally { _tradingLock = false; }
+}
+
+async function _runTechnicalTradingInner(opportunities) {
   const traceId = `tech_${Date.now()}`;
   const prompt = `You are RIFI's Technical Trading Agent. Analyze these opportunities and decide which ones to trade.
 
@@ -2826,10 +2855,20 @@ Respond with JSON:
           leverage: '10', holdSide,
         }).catch(() => {});
 
+        // Validate LLM output
+        const entryPrice = parseFloat(trade.price);
+        if (!entryPrice || isNaN(entryPrice) || entryPrice <= 0) {
+          console.warn(`[TechTrading] Invalid price for ${trade.symbol}: ${trade.price}, skip`);
+          continue;
+        }
+        if (!trade.side || !['buy', 'sell'].includes(trade.side)) {
+          console.warn(`[TechTrading] Invalid side for ${trade.symbol}: ${trade.side}, skip`);
+          continue;
+        }
+
         // Calculate proper size in contracts
         // Bitget size = number of contracts. Notional = size * price. Margin = notional / leverage.
         // We want to use ~$2.5 margin with 10x leverage = $25 notional. size = 25 / price.
-        const entryPrice = parseFloat(trade.price) || parseFloat(trade.size) || 1;
         const targetNotional = 25; // $2.5 margin * 10x leverage
         let contractSize = Math.max(1, Math.round(targetNotional / entryPrice));
         // For high-price assets (BTC, ETH), size is in base units (e.g. 0.001 BTC)
