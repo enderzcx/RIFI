@@ -2688,16 +2688,43 @@ async function scanMarketOpportunities() {
       } catch {}
     }
 
-    // 4. Check if we have available margin before trading
+    // 4. Check margin + pending orders before trading
     let availableMargin = 0;
+    let totalEquity = 0;
     try {
       const accts = await bitgetRequest('GET', '/api/v2/mix/account/accounts?productType=USDT-FUTURES');
       const usdt = (accts || []).find(a => a.marginCoin === 'USDT');
       availableMargin = parseFloat(usdt?.crossedMaxAvailable || usdt?.available || '0');
+      totalEquity = parseFloat(usdt?.accountEquity || '0');
     } catch {}
 
+    // If margin locked by pending orders, cancel them to free up for potentially better trades
+    if (availableMargin < 2.0 && totalEquity >= 2.0) {
+      console.log(`[Scanner] Margin locked ($${availableMargin.toFixed(2)} avail / $${totalEquity.toFixed(2)} equity). Checking pending orders...`);
+      try {
+        const pendingOrders = await bitgetRequest('GET', '/api/v2/mix/order/orders-pending?productType=USDT-FUTURES');
+        if (pendingOrders && pendingOrders.length > 0) {
+          console.log(`[Scanner] Found ${pendingOrders.length} pending order(s). Cancelling to free margin for new opportunities...`);
+          for (const order of pendingOrders) {
+            try {
+              await bitgetRequest('POST', '/api/v2/mix/order/cancel-order', {
+                symbol: order.symbol, productType: 'USDT-FUTURES', orderId: order.orderId,
+              });
+              console.log(`[Scanner] Cancelled ${order.symbol} ${order.side} @ ${order.price} (orderId: ${order.orderId})`);
+            } catch (e) { console.error(`[Scanner] Cancel failed:`, e.message); }
+          }
+          // Re-check available margin after cancellation
+          await new Promise(r => setTimeout(r, 1000));
+          const accts2 = await bitgetRequest('GET', '/api/v2/mix/account/accounts?productType=USDT-FUTURES');
+          const usdt2 = (accts2 || []).find(a => a.marginCoin === 'USDT');
+          availableMargin = parseFloat(usdt2?.crossedMaxAvailable || usdt2?.available || '0');
+          console.log(`[Scanner] After cancel: available margin $${availableMargin.toFixed(2)}`);
+        }
+      } catch (e) { console.error('[Scanner] Pending order check failed:', e.message); }
+    }
+
     if (availableMargin < 2.0) {
-      console.log(`[Scanner] Skip trading: available margin $${availableMargin.toFixed(2)} < $2.00 (existing orders may be using margin)`);
+      console.log(`[Scanner] Skip trading: available margin $${availableMargin.toFixed(2)} < $2.00`);
     } else if (opportunities.length > 0) {
       await runTechnicalTrading(opportunities);
     }
