@@ -1245,7 +1245,7 @@ async function runFullAnalysis(mode, crucix, news) {
     const analystPrompt = buildAnalystSystemPrompt(mode);
     const analystResult = await runAgent('analyst', analystPrompt, ANALYST_TOOLS, ANALYST_EXECUTORS,
       `Analyze current ${mode} market conditions. Time: ${now}. Fetch data using your tools, then produce the JSON report.`,
-      { trace_id: traceId, max_tokens: 1000, timeout: 45000 }
+      { trace_id: traceId, max_tokens: 1000, timeout: 90000 }
     );
 
     let parsed;
@@ -2732,17 +2732,17 @@ async function runTechnicalTrading(opportunities) {
   const traceId = `tech_${Date.now()}`;
   const prompt = `You are RIFI's Technical Trading Agent. Analyze these opportunities and decide which ones to trade.
 
-Available balance: ~$2.7 USDT in Bitget futures. Use 10x leverage. You can place limit orders at key levels.
+Available balance: ~$2.7 USDT in Bitget futures. Use 10x leverage. Pick only 1 best setup and go all-in with full balance.
 
 Opportunities (sorted by 24h move):
 ${JSON.stringify(opportunities, null, 2)}
 
 Rules:
-- Pick MAX 2 best setups — you have very limited capital
+- Pick ONLY 1 best setup — go all-in, you have very limited capital
 - Prefer: RSI oversold (<30) for longs, RSI overbought (>70) for shorts
 - Use limit orders at support/resistance levels, NOT market orders
 - Set tight stop-loss (2-3% from entry for 10x = 20-30% account risk)
-- Each position: 0.5-1.0 USDT margin max
+- Position size: use 2.0-2.5 USDT margin (nearly full balance). Bitget min order is usually ~5 USDT notional, so with 10x leverage 2.5 USDT margin = $25 notional.
 - Prefer coins with high volume and extreme funding rates (arb potential)
 - If nothing looks good, respond with empty trades array
 
@@ -2789,11 +2789,22 @@ Respond with JSON:
           leverage: '10', holdSide,
         }).catch(() => {});
 
+        // Calculate proper size in contracts
+        // Bitget size = number of contracts. Notional = size * price. Margin = notional / leverage.
+        // We want to use ~$2.5 margin with 10x leverage = $25 notional. size = 25 / price.
+        const entryPrice = parseFloat(trade.price) || parseFloat(trade.size) || 1;
+        const targetNotional = 25; // $2.5 margin * 10x leverage
+        let contractSize = Math.max(1, Math.round(targetNotional / entryPrice));
+        // For high-price assets (BTC, ETH), size is in base units (e.g. 0.001 BTC)
+        if (entryPrice > 100) contractSize = Math.max(parseFloat(trade.size) || 1, +(targetNotional / entryPrice).toFixed(4));
+        const finalSize = String(contractSize);
+        console.log(`[TechTrading] ${trade.symbol} size calc: price=${entryPrice} targetNotional=${targetNotional} → size=${finalSize}`);
+
         // Place limit order
         const order = await bitgetRequest('POST', '/api/v2/mix/order/place-order', {
           symbol: trade.symbol, productType: 'USDT-FUTURES', marginMode: 'crossed',
           marginCoin: 'USDT', side: trade.side, tradeSide: 'open',
-          orderType: trade.orderType || 'limit', size: trade.size,
+          orderType: trade.orderType || 'limit', size: finalSize,
           ...(trade.price ? { price: String(trade.price) } : {}),
         });
 
