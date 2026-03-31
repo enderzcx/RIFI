@@ -5,8 +5,8 @@ export const tools: ChatCompletionTool[] = [
     type: 'function',
     function: {
       name: 'get_market_signals',
-      description: 'Get latest market intelligence signals from 27+ data sources (geopolitics, macro, crypto news, social sentiment). Returns preprocessed structured signals with risk scores and alerts.',
-      parameters: { type: 'object', properties: {}, required: [] },
+      description: 'Get latest market intelligence signals from 27+ data sources (geopolitics, macro, crypto news, social sentiment). Returns preprocessed structured signals with risk scores and alerts. Use mode="stock" for US equity market analysis.',
+      parameters: { type: 'object', properties: { mode: { type: 'string', enum: ['crypto', 'stock'], description: 'Analysis mode: crypto (default) or stock (US equities)' } } },
     },
   },
   {
@@ -123,7 +123,7 @@ export const tools: ChatCompletionTool[] = [
       parameters: {
         type: 'object',
         properties: {
-          section: { type: 'string', enum: ['profile', 'patterns', 'decisions'], description: 'profile = user preferences/risk tolerance, patterns = trading lessons learned, decisions = important trade records' },
+          section: { type: 'string', enum: ['profile', 'patterns', 'decisions', 'market_regime', 'strategy_feedback', 'risk_lesson', 'reference'], description: 'profile = user preferences, patterns = trading lessons, decisions = trade records, market_regime = current market state (auto-expires 3d), strategy_feedback = strategy performance notes (30d), risk_lesson = permanent risk lessons, reference = external resource pointers' },
           content: { type: 'string', description: 'Content to add to memory' },
         },
         required: ['section', 'content'],
@@ -162,6 +162,78 @@ export const tools: ChatCompletionTool[] = [
           token: { type: 'string', description: 'Token symbol, e.g. ETH, BTC' },
         },
         required: ['token'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'lifi_swap',
+      description: 'Cross-chain swap via LiFi aggregator (60+ chains, any token pair). Use for: cross-chain transfers, buying tokenized US stocks on BSC (AAPLon=Apple, NVDAon=NVIDIA, TSLAon=Tesla, SPYon=S&P500), swapping tokens not available on Base Uniswap. BSC has cheapest gas for stock tokens.',
+      parameters: {
+        type: 'object',
+        properties: {
+          from_chain: { type: 'string', enum: ['base', 'ethereum', 'bsc'], description: 'Source chain' },
+          to_chain: { type: 'string', enum: ['base', 'ethereum', 'bsc'], description: 'Destination chain' },
+          from_token: { type: 'string', description: 'Source token symbol (USDC, WETH, ETH) or contract address' },
+          to_token: { type: 'string', description: 'Destination token symbol or contract address' },
+          amount: { type: 'string', description: 'Amount in human-readable units (e.g. "100" for 100 USDC)' },
+        },
+        required: ['from_chain', 'to_chain', 'from_token', 'to_token', 'amount'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'bitget_trade',
+      description: 'Trade on Bitget CEX. Supports spot and USDT-margined futures. Use for: buying/selling crypto with deep liquidity, opening/closing futures positions with leverage. Account has USDT balance.',
+      parameters: {
+        type: 'object',
+        properties: {
+          market: { type: 'string', enum: ['spot', 'futures'], description: 'Market type' },
+          symbol: { type: 'string', description: 'Trading pair, e.g. BTCUSDT, ETHUSDT, SOLUSDT' },
+          side: { type: 'string', enum: ['buy', 'sell'], description: 'Buy or sell' },
+          amount: { type: 'string', description: 'Amount (in base currency for spot, contracts for futures)' },
+          order_type: { type: 'string', enum: ['market', 'limit'], description: 'Order type (default: market)' },
+          price: { type: 'string', description: 'Limit price (required for limit orders)' },
+          leverage: { type: 'number', description: 'Leverage for futures (e.g. 5, 10, 20). Default: exchange default' },
+        },
+        required: ['market', 'symbol', 'side', 'amount'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'bitget_account',
+      description: 'Get Bitget account info: balances (spot + futures), open positions, or price ticker. Use before trading to check available funds.',
+      parameters: {
+        type: 'object',
+        properties: {
+          action: { type: 'string', enum: ['balance', 'positions', 'ticker'], description: 'What to query' },
+          symbol: { type: 'string', description: 'Symbol for ticker query (e.g. BTCUSDT)' },
+        },
+        required: ['action'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'manage_strategy',
+      description: 'Create, list, or update trading strategies. The Strategist Agent evaluates active strategies against market conditions every 15 minutes. Examples: "DCA into ETH at $1800-1900", "Grid trade BTC $58k-62k", "Stop if VIX > 30".',
+      parameters: {
+        type: 'object',
+        properties: {
+          action: { type: 'string', enum: ['create', 'list', 'update', 'cancel'], description: 'Action to perform' },
+          goal: { type: 'string', description: 'Strategy goal in natural language (for create)' },
+          template: { type: 'string', enum: ['grid', 'dca', 'ma_cross', 'trend', 'event', 'custom'], description: 'Strategy template (for create, default: custom)' },
+          params: { type: 'object', description: 'Strategy parameters (price range, amounts, etc.)' },
+          strategy_id: { type: 'number', description: 'Strategy ID (for update/cancel)' },
+          status: { type: 'string', description: 'New status (for update): active, paused, cancelled' },
+        },
+        required: ['action'],
       },
     },
   },

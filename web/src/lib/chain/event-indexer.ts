@@ -1,11 +1,13 @@
 // Event Indexer — monitors on-chain callback events, maintains order state
-// Listens for Stop events from the BaseStopOrderCallback contract
+// Persists orders to disk via JsonStore (survives restarts)
 
 import { publicClient, ADDRESSES } from './config'
 import { pushService } from '@/lib/sse/push-service'
+import { JsonStore } from '@/lib/tasks'
 import { parseAbiItem } from 'viem'
 
 export interface IndexedOrder {
+  id: number        // JsonStore requires id field
   orderId: number
   pair: string
   client: string
@@ -19,29 +21,31 @@ export interface IndexedOrder {
   threshold?: number
 }
 
-// In-memory order index
-const orders: Map<number, IndexedOrder> = new Map()
-let nextOrderId = 0
+// Persistent order store
+const orderStore = new JsonStore<IndexedOrder>('orders.json')
+
+// Derive next ID from existing orders
+let nextOrderId = orderStore.getAll().reduce((max, o) => Math.max(max, o.orderId + 1), 0)
 let lastBlock = 0
 let isPolling = false
 let pollInterval: ReturnType<typeof setInterval> | null = null
 
 export function getActiveOrders(): IndexedOrder[] {
-  return Array.from(orders.values()).filter(o => o.status === 'active')
+  return orderStore.filter(o => o.status === 'active')
 }
 
 export function getAllOrders(): IndexedOrder[] {
-  return Array.from(orders.values())
+  return orderStore.getAll()
 }
 
 export function getOrder(orderId: number): IndexedOrder | undefined {
-  return orders.get(orderId)
+  return orderStore.get(orderId)
 }
 
 export function cancelOrder(orderId: number): boolean {
-  const order = orders.get(orderId)
+  const order = orderStore.get(orderId)
   if (!order || order.status !== 'active') return false
-  order.status = 'cancelled' as IndexedOrder['status']
+  orderStore.update(orderId, { status: 'cancelled' as IndexedOrder['status'] })
   pushService.broadcastAll({
     type: 'ORDER_CANCELLED',
     data: { orderId },
@@ -50,7 +54,7 @@ export function cancelOrder(orderId: number): boolean {
   return true
 }
 
-// Track orders created by our app (since the simple callback has no registry)
+// Track orders created by our app
 export function trackOrder(params: {
   pair: string
   client: string
@@ -59,7 +63,8 @@ export function trackOrder(params: {
   amount: string
 }): number {
   const id = nextOrderId++
-  orders.set(id, {
+  const order: IndexedOrder = {
+    id,
     orderId: id,
     pair: params.pair,
     client: params.client,
@@ -70,7 +75,8 @@ export function trackOrder(params: {
     status: 'active',
     createdAt: new Date().toISOString(),
     threshold: params.threshold,
-  })
+  }
+  orderStore.set(order)
 
   pushService.broadcastAll({
     type: 'ORDER_CREATED',
@@ -92,9 +98,12 @@ export async function startEventIndexer(intervalMs = 15_000) {
   lastBlock = Number(await publicClient.getBlockNumber()) - 500 // ~15 min lookback
   isPolling = true
 
+  const restoredActive = getActiveOrders().length
+  const restoredTotal = orderStore.size
+  console.log(`[EventIndexer] Started from block ${lastBlock} (restored ${restoredActive} active / ${restoredTotal} total orders)`)
+
   pollEvents()
   pollInterval = setInterval(pollEvents, intervalMs)
-  console.log(`[EventIndexer] Started from block ${lastBlock}`)
 }
 
 export function stopEventIndexer() {
@@ -123,23 +132,24 @@ async function pollEvents() {
       const tokens = log.args.tokens as bigint[] | undefined
 
       // Find matching active order
-      for (const [id, order] of orders) {
+      const activeOrders = getActiveOrders()
+      for (const order of activeOrders) {
         if (
-          order.status === 'active' &&
           order.pair.toLowerCase() === pair.toLowerCase() &&
           order.client.toLowerCase() === client.toLowerCase()
         ) {
-          order.status = 'executed'
-          order.executedTxHash = log.transactionHash
-          if (tokens && tokens.length > 1) {
-            order.amountOut = tokens[1].toString()
-          }
+          const amountOut = (tokens && tokens.length > 1) ? tokens[1].toString() : ''
+          orderStore.update(order.id, {
+            status: 'executed' as IndexedOrder['status'],
+            executedTxHash: log.transactionHash,
+            amountOut,
+          })
 
           pushService.broadcastAll({
             type: 'ORDER_EXECUTED',
             data: {
-              orderId: id,
-              amountOut: order.amountOut,
+              orderId: order.orderId,
+              amountOut,
               txHash: log.transactionHash,
             },
             timestamp: new Date().toISOString(),
