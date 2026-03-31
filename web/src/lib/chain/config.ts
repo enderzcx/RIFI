@@ -65,7 +65,7 @@ export const SESSION_MANAGER_ABI = [
 // Clients
 export const publicClient = createPublicClient({
   chain: base,
-  transport: http(process.env.BASE_RPC_URL || 'https://base-mainnet.g.alchemy.com/v2/Xa8Tzl_kJqF9lHPEPd3Lk'),
+  transport: http(process.env.BASE_RPC_URL || 'https://mainnet.base.org'),
 })
 
 export function getWalletClient() {
@@ -75,7 +75,7 @@ export function getWalletClient() {
   return createWalletClient({
     account,
     chain: base,
-    transport: http(process.env.BASE_RPC_URL || 'https://base-mainnet.g.alchemy.com/v2/Xa8Tzl_kJqF9lHPEPd3Lk'),
+    transport: http(process.env.BASE_RPC_URL || 'https://mainnet.base.org'),
   })
 }
 
