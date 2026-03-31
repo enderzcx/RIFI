@@ -2070,9 +2070,9 @@ async function executeBitgetTrade(signal, traceId) {
   const action = signal.recommended_action;
   const confidence = signal.confidence || 0;
 
-  // Only trade on strong signals
-  if (!['strong_buy', 'strong_sell'].includes(action)) {
-    console.log(`[BitgetExec] Action "${action}" not strong enough, skip`);
+  // Trade on actionable signals (Risk Agent already approved)
+  if (['hold'].includes(action)) {
+    console.log(`[BitgetExec] Action "${action}", skip`);
     return;
   }
 
@@ -2688,8 +2688,17 @@ async function scanMarketOpportunities() {
       } catch {}
     }
 
-    // 4. Let Analyst Agent evaluate and place orders
-    if (opportunities.length > 0) {
+    // 4. Check if we have available margin before trading
+    let availableMargin = 0;
+    try {
+      const accts = await bitgetRequest('GET', '/api/v2/mix/account/accounts?productType=USDT-FUTURES');
+      const usdt = (accts || []).find(a => a.marginCoin === 'USDT');
+      availableMargin = parseFloat(usdt?.crossedMaxAvailable || usdt?.available || '0');
+    } catch {}
+
+    if (availableMargin < 2.0) {
+      console.log(`[Scanner] Skip trading: available margin $${availableMargin.toFixed(2)} < $2.00 (existing orders may be using margin)`);
+    } else if (opportunities.length > 0) {
       await runTechnicalTrading(opportunities);
     }
 
