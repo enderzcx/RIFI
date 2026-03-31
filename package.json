@@ -1,0 +1,32 @@
+{
+  "name": "@vps/rifi",
+  "version": "1.0.0",
+  "description": "[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE) [![Base](https://img.shields.io/badge/Chain-Base-0052FF)](https://base.org) [![Reactive](https://img.shields.io/badge/Reactive_Network-1597-purple)](https://reactive.network) [![Demo](https://img.shields.io/badge/Live_Demo-online-green)](https://enderzcxai.duckdns.org)",
+  "main": "index.js",
+  "directories": {
+    "lib": "lib",
+    "test": "test"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/enderzcx/RIFI.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/enderzcx/RIFI/issues"
+  },
+  "homepage": "https://github.com/enderzcx/RIFI#readme",
+  "dependencies": {
+    "@lifi/sdk": "^3.16.3",
+    "better-sqlite3": "^12.8.0",
+    "express": "^5.1.0",
+    "viem": "^2.47.6",
+    "ws": "^8.20.0"
+  }
+}
