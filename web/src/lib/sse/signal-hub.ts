@@ -9,6 +9,7 @@ interface RawSignal {
   timestamp: string
   macro_risk_score: number
   crypto_sentiment: number
+  stock_sentiment?: number
   alerts: Array<{
     level: string
     signal: string
@@ -20,6 +21,7 @@ interface RawSignal {
   briefing?: string
   push_worthy?: boolean
   push_reason?: string
+  mode?: string
 }
 
 // Signal log — MEDIUM/LOW go here silently

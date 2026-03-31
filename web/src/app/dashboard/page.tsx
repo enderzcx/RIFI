@@ -13,30 +13,56 @@ interface Portfolio {
   totalValueUSD: string
 }
 
+type MarketMode = 'crypto' | 'stock'
+
 interface Signals {
   macro_risk_score: number
   crypto_sentiment: number
+  stock_sentiment?: number
   technical_bias: string
   recommended_action: string
   confidence: number
   briefing?: string
   alerts?: Array<{ level: string; signal: string; source: string; relevance: number }>
   llm_meta?: { model: string; duration_s: number; tokens: { total: number } }
+  mode?: string
   error?: string
+}
+
+interface TradeStats {
+  total_trades: number
+  open_trades: number
+  wins: number
+  losses: number
+  win_rate: string
+  total_pnl: number
+  avg_win: number
+  avg_loss: number
+  profit_factor: number
+  max_drawdown: number
+  open_positions: Array<{ trade_id: string; pair: string; side: string; amount: number; entry_price: number }>
+  recent_closed: Array<{ trade_id: string; pair: string; side: string; pnl: number; pnl_pct: number; entry_price: number; exit_price: number; opened_at: string; closed_at: string }>
 }
 
 export default function DashboardPage() {
   const [portfolio, setPortfolio] = useState<Portfolio | null>(null)
   const [signals, setSignals] = useState<Signals | null>(null)
   const [decisions, setDecisions] = useState<Array<{ time: string; content: string }>>([])
+  const [marketMode, setMarketMode] = useState<MarketMode>('crypto')
+  const [tradeStats, setTradeStats] = useState<TradeStats | null>(null)
 
   useEffect(() => {
     fetchPortfolio()
-    fetchSignals()
+    fetchTradeStats()
     const i1 = setInterval(fetchPortfolio, 30000)
-    const i2 = setInterval(fetchSignals, 60000)
-    return () => { clearInterval(i1); clearInterval(i2) }
+    const i3 = setInterval(fetchTradeStats, 60000)
+    return () => { clearInterval(i1); clearInterval(i3) }
   }, [])
+  useEffect(() => {
+    fetchSignals()
+    const i2 = setInterval(fetchSignals, 60000)
+    return () => clearInterval(i2)
+  }, [marketMode])
 
   async function fetchPortfolio() {
     try {
@@ -47,8 +73,15 @@ export default function DashboardPage() {
 
   async function fetchSignals() {
     try {
-      const res = await fetch('/api/signals')
+      const res = await fetch(`/api/signals?mode=${marketMode}`)
       if (res.ok) setSignals(await res.json())
+    } catch {}
+  }
+
+  async function fetchTradeStats() {
+    try {
+      const res = await fetch('/api/trades/stats')
+      if (res.ok) setTradeStats(await res.json())
     } catch {}
   }
 
@@ -106,11 +139,23 @@ export default function DashboardPage() {
 
             {/* Signals */}
             <div className="glass-card p-5">
-              <h3 className="text-[11px] uppercase tracking-wider text-zinc-500 font-medium mb-4">Market Intelligence</h3>
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-[11px] uppercase tracking-wider text-zinc-500 font-medium">Market Intelligence</h3>
+                <div className="flex gap-1">
+                  {(['crypto', 'stock'] as MarketMode[]).map(m => (
+                    <button key={m} onClick={() => setMarketMode(m)}
+                      className={`text-[9px] px-2 py-0.5 rounded-full transition-colors ${
+                        marketMode === m ? 'bg-violet-500/20 text-violet-400' : 'bg-white/[0.06] text-zinc-600 hover:text-zinc-400'
+                      }`}>
+                      {m === 'crypto' ? 'Crypto' : 'Stock'}
+                    </button>
+                  ))}
+                </div>
+              </div>
               {signals && !signals.error ? (
                 <div className="space-y-3">
                   <div className="flex justify-between"><span className="text-xs text-zinc-500">Macro Risk</span><span className={`text-sm font-mono ${riskColor(signals.macro_risk_score)}`}>{signals.macro_risk_score}/100</span></div>
-                  <div className="flex justify-between"><span className="text-xs text-zinc-500">Sentiment</span><span className={`text-sm font-mono ${sentColor(signals.crypto_sentiment)}`}>{signals.crypto_sentiment}/100</span></div>
+                  <div className="flex justify-between"><span className="text-xs text-zinc-500">{marketMode === 'stock' ? 'Stock Sentiment' : 'Sentiment'}</span><span className={`text-sm font-mono ${sentColor(marketMode === 'stock' ? (signals.stock_sentiment ?? 0) : signals.crypto_sentiment)}`}>{marketMode === 'stock' ? (signals.stock_sentiment ?? 0) : signals.crypto_sentiment}/100</span></div>
                   <div className="flex justify-between">
                     <span className="text-xs text-zinc-500">Bias</span>
                     <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
@@ -166,6 +211,50 @@ export default function DashboardPage() {
               </div>
             </div>
           )}
+
+          {/* PnL & Trade Stats */}
+          <div className="grid grid-cols-2 gap-4 mb-4">
+            <div className="glass-card p-5">
+              <h3 className="text-[11px] uppercase tracking-wider text-zinc-500 font-medium mb-3">Trading Performance</h3>
+              {tradeStats && tradeStats.total_trades > 0 ? (
+                <div className="space-y-2">
+                  <div className="flex justify-between"><span className="text-xs text-zinc-500">Total PnL</span><span className={`text-sm font-mono font-semibold ${tradeStats.total_pnl >= 0 ? 'text-green-400' : 'text-red-400'}`}>{tradeStats.total_pnl >= 0 ? '+' : ''}{tradeStats.total_pnl}</span></div>
+                  <div className="flex justify-between"><span className="text-xs text-zinc-500">Win Rate</span><span className="text-sm font-mono">{tradeStats.win_rate}</span></div>
+                  <div className="flex justify-between"><span className="text-xs text-zinc-500">Trades</span><span className="text-sm font-mono">{tradeStats.total_trades} ({tradeStats.wins}W / {tradeStats.losses}L)</span></div>
+                  <div className="flex justify-between"><span className="text-xs text-zinc-500">Profit Factor</span><span className="text-sm font-mono">{tradeStats.profit_factor}</span></div>
+                  <div className="flex justify-between"><span className="text-xs text-zinc-500">Max Drawdown</span><span className="text-sm font-mono text-red-400">{tradeStats.max_drawdown}</span></div>
+                  <div className="flex justify-between"><span className="text-xs text-zinc-500">Avg Win / Loss</span><span className="text-sm font-mono">{tradeStats.avg_win} / {tradeStats.avg_loss}</span></div>
+                  {tradeStats.open_trades > 0 && (
+                    <div className="pt-2 border-t border-white/[0.06] text-[10px] text-yellow-400">{tradeStats.open_trades} open position(s)</div>
+                  )}
+                </div>
+              ) : (
+                <p className="text-xs text-zinc-600">No trades recorded yet.</p>
+              )}
+            </div>
+
+            <div className="glass-card p-5">
+              <h3 className="text-[11px] uppercase tracking-wider text-zinc-500 font-medium mb-3">Recent Trades</h3>
+              {tradeStats?.recent_closed && tradeStats.recent_closed.length > 0 ? (
+                <div className="space-y-1.5 max-h-52 overflow-y-auto">
+                  {tradeStats.recent_closed.map((t, i) => (
+                    <div key={i} className="flex items-center justify-between text-[11px] px-2 py-1.5 rounded-lg bg-white/[0.03]">
+                      <div className="flex items-center gap-2">
+                        <span className={`font-medium ${t.side === 'buy' ? 'text-green-400' : 'text-red-400'}`}>{t.side.toUpperCase()}</span>
+                        <span className="text-zinc-500">{t.pair}</span>
+                      </div>
+                      <div className="text-right">
+                        <span className={`font-mono ${t.pnl >= 0 ? 'text-green-400' : 'text-red-400'}`}>{t.pnl >= 0 ? '+' : ''}{t.pnl}</span>
+                        <span className="text-zinc-600 ml-1.5">${t.entry_price?.toFixed(0)}-${t.exit_price?.toFixed(0)}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-xs text-zinc-600">Closed trades will appear here.</p>
+              )}
+            </div>
+          </div>
 
           {/* Decision Log */}
           <div className="glass-card p-5">

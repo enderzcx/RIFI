@@ -10,7 +10,7 @@ export const ADDRESSES = {
   UNISWAP_ROUTER: '0x4752ba5DBc23f44D87826276BF6Fd6b1C372aD24' as `0x${string}`,
   WETH_USDC_PAIR: '0x88A43bbDF9D098eEC7bCEda4e2494615dfD9bB9C' as `0x${string}`,
   CALLBACK_PROXY: '0x0D3E76De6bC44309083cAAFdB49A088B8a250947' as `0x${string}`,
-  SESSION_MANAGER: '0x5810d1A3DAEfe21fB266aB00Ec74ca628637550e' as `0x${string}`,
+  SESSION_MANAGER: '0x342168e8D2BF8315BbF72F409A94f1EC7570f611' as `0x${string}`, // V2: +executeCall +allowedTargets
   ORDER_REGISTRY: '0xcE9720Ae1185e8E8c5739A5d3f88D75F3823D698' as `0x${string}`,
 } as const
 
@@ -49,17 +49,23 @@ export const ORDER_REGISTRY_ABI = [
 ] as const
 
 export const SESSION_MANAGER_ABI = [
-  { type: 'function', name: 'createSession', inputs: [{ name: 'executor', type: 'address' }, { name: 'maxPerTrade', type: 'uint256' }, { name: 'totalBudget', type: 'uint256' }, { name: 'duration', type: 'uint256' }], outputs: [], stateMutability: 'nonpayable' },
+  // V1 functions
+  { type: 'function', name: 'createSession', inputs: [{ name: 'executor', type: 'address' }, { name: 'totalBudget', type: 'uint256' }, { name: 'durationSeconds', type: 'uint256' }, { name: 'tokenPairs', type: 'address[]' }], outputs: [], stateMutability: 'nonpayable' },
   { type: 'function', name: 'revokeSession', inputs: [], outputs: [], stateMutability: 'nonpayable' },
   { type: 'function', name: 'getSession', inputs: [{ name: 'user', type: 'address' }], outputs: [{ name: 'executor', type: 'address' }, { name: 'maxPerTrade', type: 'uint256' }, { name: 'totalBudget', type: 'uint256' }, { name: 'spent', type: 'uint256' }, { name: 'remaining', type: 'uint256' }, { name: 'dailyRemaining', type: 'uint256' }, { name: 'expiry', type: 'uint256' }, { name: 'active', type: 'bool' }, { name: 'expired', type: 'bool' }], stateMutability: 'view' },
   { type: 'function', name: 'canExecute', inputs: [{ name: 'user', type: 'address' }, { name: 'amount', type: 'uint256' }], outputs: [{ name: 'ok', type: 'bool' }, { name: 'reason', type: 'string' }], stateMutability: 'view' },
   { type: 'function', name: 'executeSwap', inputs: [{ name: 'user', type: 'address' }, { name: 'tokenIn', type: 'address' }, { name: 'tokenOut', type: 'address' }, { name: 'amountIn', type: 'uint256' }], outputs: [{ name: 'amountOut', type: 'uint256' }], stateMutability: 'nonpayable' },
+  // V2 functions
+  { type: 'function', name: 'executeCall', inputs: [{ name: 'user', type: 'address' }, { name: 'target', type: 'address' }, { name: 'spendAmount', type: 'uint256' }, { name: 'data', type: 'bytes' }], outputs: [{ name: 'result', type: 'bytes' }], stateMutability: 'nonpayable' },
+  { type: 'function', name: 'setAllowedTarget', inputs: [{ name: 'target', type: 'address' }, { name: 'allowed', type: 'bool' }], outputs: [], stateMutability: 'nonpayable' },
+  { type: 'function', name: 'isAllowedTarget', inputs: [{ name: 'target', type: 'address' }], outputs: [{ type: 'bool' }], stateMutability: 'view' },
+  { type: 'function', name: 'owner', inputs: [], outputs: [{ type: 'address' }], stateMutability: 'view' },
 ] as const
 
 // Clients
 export const publicClient = createPublicClient({
   chain: base,
-  transport: http(process.env.BASE_RPC_URL || 'https://mainnet.base.org'),
+  transport: http(process.env.BASE_RPC_URL || 'https://base-mainnet.g.alchemy.com/v2/Xa8Tzl_kJqF9lHPEPd3Lk'),
 })
 
 export function getWalletClient() {
@@ -69,7 +75,7 @@ export function getWalletClient() {
   return createWalletClient({
     account,
     chain: base,
-    transport: http(process.env.BASE_RPC_URL || 'https://mainnet.base.org'),
+    transport: http(process.env.BASE_RPC_URL || 'https://base-mainnet.g.alchemy.com/v2/Xa8Tzl_kJqF9lHPEPd3Lk'),
   })
 }
 

@@ -14,3 +14,6 @@ remappings = [
     "v2-periphery/=lib/v2-periphery/contracts/",
     "v2-core/=lib/v2-core/contracts/",
 ]
+
+[rpc_endpoints]
+base = "https://base-mainnet.g.alchemy.com/v2/Xa8Tzl_kJqF9lHPEPd3Lk"

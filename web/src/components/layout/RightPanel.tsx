@@ -14,13 +14,31 @@ interface PortfolioData {
   totalValueUSD: string
 }
 
+type MarketMode = 'crypto' | 'stock'
+
+interface PriceEntry {
+  price: number
+  change5m: number
+  high5m: number
+  low5m: number
+  updated: string | null
+}
+
+interface PricesData {
+  prices: Record<string, PriceEntry>
+  ws_connected: boolean
+  pairs: string[]
+}
+
 interface SignalData {
   macro_risk_score: number
   crypto_sentiment: number
+  stock_sentiment?: number
   technical_bias: string
   recommended_action: string
   briefing?: string
   alerts?: Array<{ level: string; signal: string; source: string }>
+  mode?: string
 }
 
 interface OrderData {
@@ -53,6 +71,8 @@ export function RightPanel() {
   const [sessionPending, setSessionPending] = useState(false)
   const [sentinelMode, setSentinelMode] = useState<'aggressive' | 'conservative'>('conservative')
   const [modeSwitching, setModeSwitching] = useState(false)
+  const [marketMode, setMarketMode] = useState<MarketMode>('crypto')
+  const [prices, setPrices] = useState<PricesData | null>(null)
 
   const { writeContractAsync } = useWriteContract()
   const { switchChainAsync } = useSwitchChain()
@@ -103,15 +123,21 @@ export function RightPanel() {
     } catch (err) { console.error('Session revoke failed:', err) }
   }
 
-  useEffect(() => { fetchSentinelMode() }, [])
+  useEffect(() => { fetchSentinelMode(); fetchPrices() }, [])
   useEffect(() => {
     if (!isConnected) return
-    fetchPortfolio(); fetchSignals(); fetchOrders()
+    fetchPortfolio(); fetchOrders()
     const i1 = setInterval(fetchPortfolio, 30000)
-    const i2 = setInterval(fetchSignals, 60000)
     const i3 = setInterval(fetchOrders, 30000)
-    return () => { clearInterval(i1); clearInterval(i2); clearInterval(i3) }
+    const i4 = setInterval(fetchPrices, 5000)
+    return () => { clearInterval(i1); clearInterval(i3); clearInterval(i4) }
   }, [isConnected])
+  useEffect(() => {
+    if (!isConnected) return
+    fetchSignals()
+    const i2 = setInterval(fetchSignals, 60000)
+    return () => clearInterval(i2)
+  }, [isConnected, marketMode])
 
   async function fetchSentinelMode() {
     try { const r = await fetch('/api/sentinel-mode'); if (r.ok) { const d = await r.json(); if (d.mode) setSentinelMode(d.mode) } } catch {}
@@ -123,7 +149,8 @@ export function RightPanel() {
     setModeSwitching(false)
   }
   async function fetchPortfolio() { try { const r = await fetch(`/api/portfolio${address ? `?wallet=${address}` : ''}`); if (r.ok) setPortfolio(await r.json()) } catch {} }
-  async function fetchSignals() { try { const r = await fetch('/api/signals'); if (r.ok) setSignals(await r.json()) } catch {} }
+  async function fetchSignals() { try { const r = await fetch(`/api/signals?mode=${marketMode}`); if (r.ok) setSignals(await r.json()) } catch {} }
+  async function fetchPrices() { try { const r = await fetch('/api/prices'); if (r.ok) setPrices(await r.json()) } catch {} }
   const [allOrders, setAllOrders] = useState<OrderData[]>([])
   async function fetchOrders() { try { const r = await fetch(`/api/orders${address ? `?wallet=${address}` : ''}`); if (r.ok) { const d = await r.json(); setOrders(d.active || []); setAllOrders([...(d.active || []), ...(d.recent || [])]) } } catch {} }
 
@@ -215,25 +242,57 @@ export function RightPanel() {
 
         {/* ===== MARKET TAB ===== */}
         {tab === 'market' && <>
-          {/* ETH Price Chart */}
-          <div className="glass-card p-3">
-            <div className="flex items-center justify-between mb-1">
-              <span className="text-xs font-medium text-zinc-300">ETH/USDC</span>
-              <div className="flex gap-1">
-                <span className="text-[8px] px-1.5 py-0.5 rounded bg-white/[0.06] text-zinc-500">1H</span>
-                <span className="text-[8px] px-1.5 py-0.5 rounded bg-violet-500/20 text-violet-400">24H</span>
-                <span className="text-[8px] px-1.5 py-0.5 rounded bg-white/[0.06] text-zinc-500">7D</span>
+          {/* Mode Toggle */}
+          <div className="flex gap-1 mb-2">
+            {(['crypto', 'stock'] as MarketMode[]).map(m => (
+              <button key={m} onClick={() => setMarketMode(m)}
+                className={`flex-1 py-1.5 text-[10px] uppercase tracking-wider font-medium rounded-lg transition-colors ${
+                  marketMode === m ? 'bg-violet-500/20 text-violet-400 border border-violet-500/30' : 'bg-white/[0.04] text-zinc-600 hover:text-zinc-400 border border-transparent'
+                }`}>
+                {m === 'crypto' ? 'Crypto' : 'US Stock'}
+              </button>
+            ))}
+          </div>
+
+          {/* Live Prices */}
+          {marketMode === 'crypto' && prices?.prices && (
+            <div className="glass-card p-3">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs font-medium text-zinc-300">Live Prices</span>
+                <div className="flex items-center gap-1">
+                  <div className={`w-1.5 h-1.5 rounded-full ${prices.ws_connected ? 'bg-green-400' : 'bg-red-400'}`}/>
+                  <span className="text-[8px] text-zinc-600">{prices.ws_connected ? 'OKX Live' : 'Offline'}</span>
+                </div>
+              </div>
+              <div className="space-y-1.5">
+                {prices.pairs.map(pair => {
+                  const p = prices.prices[pair]
+                  if (!p || !p.price) return null
+                  const symbol = pair.replace('-USDT', '')
+                  const changeColor = p.change5m > 0 ? 'text-green-400' : p.change5m < 0 ? 'text-red-400' : 'text-zinc-500'
+                  return (
+                    <div key={pair} className="flex items-center justify-between px-1.5 py-1 rounded-lg hover:bg-white/[0.03]">
+                      <div className="flex items-center gap-2">
+                        <span className="text-[11px] font-medium text-zinc-300">{symbol}</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-[11px] font-mono text-zinc-200">${p.price.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
+                        <span className={`text-[9px] font-mono ${changeColor}`}>{p.change5m > 0 ? '+' : ''}{p.change5m.toFixed(2)}%</span>
+                      </div>
+                    </div>
+                  )
+                })}
               </div>
             </div>
-            <div className="flex items-baseline gap-2 mb-2">
-              <span className="text-lg font-semibold">${portfolio?.price?.toLocaleString() || '...'}</span>
+          )}
+          {marketMode === 'stock' && (
+            <div className="glass-card p-3">
+              <span className="text-xs font-medium text-zinc-300">S&P 500</span>
+              <div className="flex items-baseline gap-2 mt-1">
+                <span className="text-[11px] text-zinc-500">Stock prices via OKX WebSocket not available. Use Crucix macro data.</span>
+              </div>
             </div>
-            <svg viewBox="0 0 340 60" className="w-full h-[60px]">
-              <defs><linearGradient id="cg" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="rgba(139,92,246,0.15)"/><stop offset="100%" stopColor="rgba(139,92,246,0)"/></linearGradient></defs>
-              <path d="M0,35 L18,32 L36,38 L54,30 L72,25 L90,28 L108,20 L126,22 L144,18 L162,25 L180,15 L198,20 L216,18 L234,25 L252,22 L270,28 L288,20 L306,25 L324,30 L340,28" fill="none" stroke="rgba(139,92,246,0.6)" strokeWidth="1.5"/>
-              <path d="M0,35 L18,32 L36,38 L54,30 L72,25 L90,28 L108,20 L126,22 L144,18 L162,25 L180,15 L198,20 L216,18 L234,25 L252,22 L270,28 L288,20 L306,25 L324,30 L340,28 L340,60 L0,60 Z" fill="url(#cg)"/>
-            </svg>
-          </div>
+          )}
 
           {/* Risk & Sentiment */}
           <div className="glass-card p-3 space-y-2">
@@ -244,8 +303,14 @@ export function RightPanel() {
                 <div className="w-full h-1 bg-white/[0.06] rounded-full"><div className="h-1 bg-yellow-400/60 rounded-full" style={{width: `${signals.macro_risk_score}%`}}/></div>
               </div>
               <div>
-                <div className="flex justify-between text-[11px] mb-1"><span className="text-zinc-500">Sentiment</span><span className={sentColor(signals.crypto_sentiment)}>{signals.crypto_sentiment}/100</span></div>
-                <div className="w-full h-1 bg-white/[0.06] rounded-full"><div className="h-1 bg-zinc-400/60 rounded-full" style={{width: `${signals.crypto_sentiment}%`}}/></div>
+                {(() => {
+                  const sentLabel = marketMode === 'stock' ? 'Stock Sentiment' : 'Sentiment'
+                  const sentVal = marketMode === 'stock' ? (signals.stock_sentiment ?? 0) : signals.crypto_sentiment
+                  return (<>
+                    <div className="flex justify-between text-[11px] mb-1"><span className="text-zinc-500">{sentLabel}</span><span className={sentColor(sentVal)}>{sentVal}/100</span></div>
+                    <div className="w-full h-1 bg-white/[0.06] rounded-full"><div className="h-1 bg-zinc-400/60 rounded-full" style={{width: `${sentVal}%`}}/></div>
+                  </>)
+                })()}
               </div>
               <div className="flex justify-between items-center">
                 <span className="text-[11px] text-zinc-500">Bias</span>
