@@ -2702,8 +2702,9 @@ async function scanMarketOpportunities() {
     if (availableMargin < 2.0 && totalEquity >= 2.0) {
       console.log(`[Scanner] Margin locked ($${availableMargin.toFixed(2)} avail / $${totalEquity.toFixed(2)} equity). Checking pending orders...`);
       try {
-        const pendingOrders = await bitgetRequest('GET', '/api/v2/mix/order/orders-pending?productType=USDT-FUTURES');
-        if (pendingOrders && pendingOrders.length > 0) {
+        const pendingData = await bitgetRequest('GET', '/api/v2/mix/order/orders-pending?productType=USDT-FUTURES');
+        const pendingOrders = pendingData?.entrustedList || (Array.isArray(pendingData) ? pendingData : []);
+        if (pendingOrders.length > 0) {
           console.log(`[Scanner] Found ${pendingOrders.length} pending order(s). Cancelling to free margin for new opportunities...`);
           for (const order of pendingOrders) {
             try {
