@@ -568,7 +568,7 @@ function connectOKXWebSocket() {
           }
         }
       }
-    } catch {}
+    } catch (e) { console.error('[OKX-WS] Parse error:', e.message); }
   });
 
   ws.on('close', () => {
@@ -1509,9 +1509,11 @@ async function runRiskCheck(signal, traceId) {
 
   // --- Hard rules (code-level, cannot be bypassed by LLM) ---
 
-  // Check consecutive losses
-  const recentTrades = db.prepare('SELECT pnl FROM trades WHERE status = ? ORDER BY closed_at DESC LIMIT 3').all('closed');
-  const consecutiveLosses = recentTrades.length >= 3 && recentTrades.every(t => t.pnl <= 0);
+  // Check consecutive losses (count from most recent, any length)
+  const recentTrades = db.prepare('SELECT pnl FROM trades WHERE status = ? ORDER BY closed_at DESC LIMIT 10').all('closed');
+  let consecutiveLossCount = 0;
+  for (const t of recentTrades) { if (t.pnl <= 0) consecutiveLossCount++; else break; }
+  const consecutiveLosses = consecutiveLossCount >= 3;
 
   // Check last loss time for cooldown
   if (consecutiveLosses) {
@@ -1530,8 +1532,15 @@ async function runRiskCheck(signal, traceId) {
   const h24 = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
   const recent24h = db.prepare('SELECT pnl FROM trades WHERE status = ? AND closed_at > ?').all('closed', h24);
   const loss24h = recent24h.reduce((s, t) => s + Math.min(0, t.pnl || 0), 0);
-  if (loss24h < -50) { // >50 USDC loss in 24h → VETO (hard threshold)
-    const reason = `24小时累计亏损 ${loss24h.toFixed(2)} USDC，超过安全阈值`;
+  // Dynamic threshold: 5% of account equity (fetch from Bitget)
+  let lossThreshold = 50; // fallback
+  try {
+    const accts = await bitgetRequest('GET', '/api/v2/mix/account/accounts?productType=USDT-FUTURES').catch(() => []);
+    const equity = parseFloat((accts || []).find(a => a.marginCoin === 'USDT')?.accountEquity || '0');
+    if (equity > 0) lossThreshold = equity * 0.05;
+  } catch {}
+  if (loss24h < -lossThreshold) {
+    const reason = `24小时累计亏损 ${loss24h.toFixed(2)} USDC，超过安全阈值 (${lossThreshold.toFixed(2)})`;
     postMessage('risk', 'executor', 'VETO', { reason }, traceId);
     return { pass: false, reason, risk_flags: ['24h_loss_limit'] };
   }
@@ -2876,34 +2885,30 @@ Respond with JSON:
         const finalSize = String(contractSize);
         console.log(`[TechTrading] ${trade.symbol} size calc: price=${entryPrice} targetNotional=${targetNotional} → size=${finalSize}`);
 
-        // Place limit order
-        const order = await bitgetRequest('POST', '/api/v2/mix/order/place-order', {
+        // Place limit order with order-level TP/SL (works before fill, unlike position-level)
+        const orderParams = {
           symbol: trade.symbol, productType: 'USDT-FUTURES', marginMode: 'crossed',
           marginCoin: 'USDT', side: trade.side, tradeSide: 'open',
           orderType: trade.orderType || 'limit', size: finalSize,
           ...(trade.price ? { price: String(trade.price) } : {}),
-        });
+        };
+        // Attach TP/SL at order level so they activate when the order fills
+        if (trade.takeProfit) orderParams.presetStopSurplusPrice = String(trade.takeProfit);
+        if (trade.stopLoss) orderParams.presetStopLossPrice = String(trade.stopLoss);
 
-        console.log(`[TechTrading] ${holdSide.toUpperCase()} ${trade.symbol} @ ${trade.price || 'market'} | orderId: ${order?.orderId}`);
+        const order = await bitgetRequest('POST', '/api/v2/mix/order/place-order', orderParams);
 
-        // Set TP/SL if provided
-        if (trade.stopLoss || trade.takeProfit) {
-          try {
-            await bitgetRequest('POST', '/api/v2/mix/order/place-tpsl-order', {
-              symbol: trade.symbol, productType: 'USDT-FUTURES', marginMode: 'crossed',
-              planType: 'pos_profit', triggerPrice: String(trade.takeProfit || '0'),
-              triggerType: 'mark_price', holdSide,
-            }).catch(() => {});
-            await bitgetRequest('POST', '/api/v2/mix/order/place-tpsl-order', {
-              symbol: trade.symbol, productType: 'USDT-FUTURES', marginMode: 'crossed',
-              planType: 'pos_loss', triggerPrice: String(trade.stopLoss || '0'),
-              triggerType: 'mark_price', holdSide,
-            }).catch(() => {});
-          } catch {}
-        }
+        console.log(`[TechTrading] ${holdSide.toUpperCase()} ${trade.symbol} @ ${trade.price || 'market'} | SL:${trade.stopLoss || '-'} TP:${trade.takeProfit || '-'} | orderId: ${order?.orderId}`);
 
+        // Record to both trades and decisions tables (so Risk Agent sees scanner trades)
+        const tradeId = `tech_${order?.orderId || Date.now()}`;
+        try {
+          insertTrade.run(tradeId, 'bitget', trade.symbol, trade.side, entryPrice, parseFloat(finalSize), 0,
+            'open', order?.orderId || '', JSON.stringify({ scanner: true, rsi: trade.rsi, reason: trade.reason }),
+            `Tech: ${trade.reason}`, new Date().toISOString());
+        } catch {}
         insertDecision.run(new Date().toISOString(), 'executor', 'tech_trade', 'limit-order',
-          JSON.stringify(trade), JSON.stringify(order), `Tech: ${trade.reason}`, '', '', 0, `bg_${order?.orderId}`);
+          JSON.stringify(trade), JSON.stringify(order), `Tech: ${trade.reason}`, '', '', 0, tradeId);
 
       } catch (err) {
         console.error(`[TechTrading] ${trade.symbol} failed:`, err.message);
