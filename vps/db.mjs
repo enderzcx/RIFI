@@ -245,8 +245,11 @@ export function createDB() {
     } catch (e) { console.error('[DB] Patrol insert error:', e.message); }
   }
 
+  // Proxy prepare/exec so modules can call db.prepare() directly
   return {
     db,
+    prepare: (...args) => db.prepare(...args),
+    exec: (...args) => db.exec(...args),
     insertNews, insertAnalysis, insertTrade, updateTradeClose,
     insertDecision, insertPatrol, insertCandle, insertSignalScore,
     persistNews, persistAnalysis, persistPatrol,
