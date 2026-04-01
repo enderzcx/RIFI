@@ -5,6 +5,7 @@ node_modules/
 !.env.example
 *.pem
 data/memory/
+data/*.db
 out/
 dist/
 .DS_Store
@@ -12,16 +13,7 @@ dist/
 __pycache__/
 *.pyc
 cache/
-cty.html
-contracts/
-ARCHITECTURE-FULL.md
-EDGE-CASE-AUDIT.md
-ARCHITECTURE.md
-arb-stop-order-test/
-sepolia-stop-order-test/
-base-stop-order-test/
-mockup-*.html
-mockups.html
+archive/
 CLAUDE.md
 web/CLAUDE.md
 web/.claude/

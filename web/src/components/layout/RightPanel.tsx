@@ -50,7 +50,7 @@ interface OrderData {
   status?: string
 }
 
-const SESSION_MANAGER = '0x5810d1A3DAEfe21fB266aB00Ec74ca628637550e' as `0x${string}`
+const SESSION_MANAGER = '0x342168e8D2BF8315BbF72F409A94f1EC7570f611' as `0x${string}` // V2
 const EXECUTOR = '0x0309dc91bB89750C317Ec69566bAF1613b57e6bB' as `0x${string}`
 const WETH = '0x4200000000000000000000000000000000000006' as `0x${string}`
 const USDC = '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913' as `0x${string}`
