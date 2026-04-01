@@ -130,7 +130,9 @@ export function createPriceStream({ db, config }) {
 
     ws.on('message', (raw) => {
       try {
-        const msg = JSON.parse(raw.toString());
+        const text = raw.toString();
+        if (text === 'pong') return; // OKX ping/pong heartbeat, not JSON
+        const msg = JSON.parse(text);
         if (msg.data && Array.isArray(msg.data)) {
           for (const tick of msg.data) {
             const pair = tick.instId;

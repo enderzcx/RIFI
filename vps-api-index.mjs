@@ -568,7 +568,9 @@ function connectOKXWebSocket() {
           }
         }
       }
-    } catch (e) { console.error('[OKX-WS] Parse error:', e.message); }
+    } catch (e) {
+      if (raw.toString() !== 'pong') console.error('[OKX-WS] Parse error:', e.message);
+    }
   });
 
   ws.on('close', () => {
