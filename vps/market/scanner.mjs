@@ -108,10 +108,16 @@ export function createScanner({ db, config, bitgetClient, agentRunner, indicator
         } catch (e) { console.error('[Scanner] Pending order check failed:', e.message); }
       }
 
+      // Only call LLM if at least one opportunity has extreme RSI (saves ~300K tokens/day)
+      const extremeSetups = opportunities.filter(o => o.rsi < 25 || o.rsi > 75);
+
       if (availableMargin < 2.0) {
         console.log(`[Scanner] Skip trading: available margin $${availableMargin.toFixed(2)} < $2.00`);
-      } else if (opportunities.length > 0) {
-        await runTechnicalTrading(opportunities);
+      } else if (extremeSetups.length > 0) {
+        console.log(`[Scanner] ${extremeSetups.length} extreme RSI setups found, calling LLM...`);
+        await runTechnicalTrading(opportunities); // pass all for context, but LLM knows to focus on extremes
+      } else {
+        console.log(`[Scanner] No extreme RSI setups (range: ${Math.min(...opportunities.map(o => o.rsi)).toFixed(0)}-${Math.max(...opportunities.map(o => o.rsi)).toFixed(0)}), skip LLM`);
       }
 
       console.log(`[Scanner] Found ${opportunities.length} opportunities from ${candidates.length} candidates`);

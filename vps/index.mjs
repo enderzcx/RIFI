@@ -77,8 +77,8 @@ priceStream.setAnomalyHandler((anomaly) => {
 
 // --- Start ---
 app.listen(config.PORT, () => {
-  console.log(`[VPS-API] Running on :${config.PORT} | LLM: ${config.LLM_MODEL} | Modes: crypto + stock | DB: data/rifi.db`);
+  console.log(`[VPS-API] Running on :${config.PORT} | LLM: ${config.LLM_MODEL} | Mode: crypto | Interval: 30min | DB: data/rifi.db`);
   pipeline.collectAndAnalyze();
-  setInterval(() => pipeline.collectAndAnalyze(), 15 * 60 * 1000);
+  setInterval(() => pipeline.collectAndAnalyze(), 30 * 60 * 1000); // 30min (was 15min, saves ~50% tokens)
   priceStream.connectOKXWebSocket();
 });

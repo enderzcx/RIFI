@@ -313,11 +313,9 @@ ${summary}
     // Persist raw news
     if (newsCount > 0) persistNews(news);
 
-    // Run both modes in parallel
-    await Promise.all([
-      runFullAnalysis('crypto', crucix, news),
-      runFullAnalysis('stock', crucix, news),
-    ]);
+    // Run crypto only (stock disabled to save ~864K tokens/day)
+    await runFullAnalysis('crypto', crucix, news);
+    // await runFullAnalysis('stock', crucix, news); // re-enable when actively trading US stocks
 
     // Score historical signals (non-blocking)
     try { scoreHistoricalSignals(); } catch (e) { console.error('[SignalScore] Error:', e.message); }
